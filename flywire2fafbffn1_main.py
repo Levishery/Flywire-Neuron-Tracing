@@ -7,6 +7,7 @@ import networkx as nx
 from cloudvolume import CloudVolume
 from sklearn.neighbors import NearestNeighbors
 from cilog import create_logger
+from utils import default_dump
 from cloudvolume.datasource.precomputed.skeleton.sharded import ShardedPrecomputedSkeletonSource
 import pickle
 import os
@@ -151,12 +152,12 @@ def filter_by_distance(skel, seg_skels, missing, segment_node_dict):
     segment_distance_dict = {}
     # filter using google skeleton
     for s in seg_skels:
-        if len(segment_node_dict[s.id])>10:
+        if len(segment_node_dict[s.id] ) >10:
             continue
         nodes = s.vertices
-        d = chamfer_distance(points*[4, 4, 40], nodes, metric='l2', direction='y_to_x')
+        d = chamfer_distance(points *[4, 4, 40], nodes, metric='l2', direction='y_to_x')
         segment_distance_dict[s.id] = d
-        if d > 2*np.mean(skel.nodes['radius'][segment_node_dict[s.id]]):
+        if d > 2* np.mean(skel.nodes['radius'][segment_node_dict[s.id]]):
             filter_id.append(s.id)
         # if d > 1000:
         #     filter_id.append(int(s.id))
@@ -178,10 +179,13 @@ def filter_by_distance(skel, seg_skels, missing, segment_node_dict):
     #         if d > 1000:
     #             filter_id.append(int(m))
     #         segment_distance_dict[m] = d
-
-
+    n_node_before_filter = skel.n_nodes
+    background_nodes = segment_node_dict[0]
     for seg_id in filter_id:
         navis.remove_nodes(skel, skel.nodes['node_id'][segment_node_dict[seg_id]], inplace=True)
+        del segment_node_dict[seg_id]
+    n_node_after_filter = skel.n_nodes
+    print(f'filtered {len(filter_id)} segments, removed {n_node_before_filter-n_node_after_filter} nodes ({len(background_nodes)} are background)')
 
 
 def mapping_segments(skel, vol_ffn1):
@@ -221,13 +225,18 @@ def mapping_segments(skel, vol_ffn1):
     return skel
 
 
+def connection_weight():
+    pass
+
+
 def get_connector(skel):
     """
 
     :param skel: mapped tree neuron
     :return: connector table, wrapped nodes filtered
     """
-    connector_table = {'node1_id':[], 'node2_id':[], 'node1_cord':[], 'node2_cord':[],  'node1_segid':[], 'node2_segid':[], 'Strahler order':[]}
+    connector_table = {'node1_id': [], 'node2_id': [], 'node1_cord': [], 'node2_cord': [], 'node1_segid': [],
+                       'node2_segid': [], 'Strahler order': []}
     connector_table = pd.DataFrame(connector_table)
     all_connection = []
     for edge in skel.edges:
@@ -241,18 +250,25 @@ def get_connector(skel):
             if [skel.nodes['seg_id'][node2].item(), skel.nodes['seg_id'][node1].item()] not in all_connection:
                 # filter wrapped connector
                 connector_table.loc[len(connector_table.index)] = [edge[0], edge[1],
-                    [skel.nodes['x'][node1].item(), skel.nodes['y'][node1].item(), skel.nodes['z'][node1].item()], [skel.nodes['x'][node2].item(),
-                        skel.nodes['y'][node2].item(), skel.nodes['z'][node2].item()], skel.nodes['seg_id'][node1].item(), skel.nodes['seg_id'][node2].item(), skel.nodes.strahler_index[node2]]
+                                                                   [skel.nodes['x'][node1].item(),
+                                                                    skel.nodes['y'][node1].item(),
+                                                                    skel.nodes['z'][node1].item()],
+                                                                   [skel.nodes['x'][node2].item(),
+                                                                    skel.nodes['y'][node2].item(),
+                                                                    skel.nodes['z'][node2].item()],
+                                                                   skel.nodes['seg_id'][node1].item(),
+                                                                   skel.nodes['seg_id'][node2].item(),
+                                                                   skel.nodes.strahler_index[node2]]
     return connector_table
 
 
-if __name__=="__main__":
-    create_logger(name='l1', file='./flywire2fafbffn1.log', sub_print=False)
-    fafbseg.flywire.set_chunkedgraph_secret("5814c407f6cca6b2c1e50f5f99e6a555")
-    proof_list = pd.read_csv('/braindat/lab/liusl/flywire/proof_stat_df.csv')
-    target_path = '../flywire_neuroskel/main_data'
+if __name__ == "__main__":
+    create_logger(name='l1', file='/braindat/lab/liusl/flywire/log/flywire2fafbffn1.log', sub_print=False)
+    target_tree_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/tree_data'
+    target_connector_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/connector_data'
+    visualization_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/visualization'
 
-    vol_ffn1 = CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0', cache=True, parallel=True)    #
+    vol_ffn1 = CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0', cache=True, parallel=True)  #
     # vol_ffn1skel = CloudVolume('precomputed://gs://fafb-ffn1-20190805/segmentation', use_https=True, parallel=True)
     # vol_ffn1skel.parallel = 4
     vol_ffn1.meta.info['skeletons'] = 'skeletons_32nm'
@@ -260,24 +276,19 @@ if __name__=="__main__":
     vol_ffn1.skeleton.meta.info['sharding']['hash'] = 'murmurhash3_x86_128'
     vol_ffn1.skeleton = ShardedPrecomputedSkeletonSource(vol_ffn1.skeleton.meta, vol_ffn1.cache, vol_ffn1.config)
 
+    flywire_skel_path = '/braindat/lab/liusl/flywire/gt_skel'
+    file_gt_skels = os.listdir(flywire_skel_path)
     # get k neurons per iter
-    k = 10
-    for i in range(0, len(proof_list), k):
-        neuron_id = proof_list['pt_root_id'][i: i+k]
-        print(f'Getting neurons: {neuron_id}')
-        gt_skels = get_mapped_flywire_neuron(neuron_id)
-        for skel in gt_skels:
-            filename = os.path.join(target_path, str(skel.id) + '.json')
-            if not os.path.exists(filename):
-                print(f'building segment tree for {skel.id}')
-                mapped_skel = mapping_segments(skel, vol_ffn1)
-                connector_table = get_connector(mapped_skel)
-                filename_connector = os.path.join(target_path, str(skel.id) + '_connector.csv')
-                with open(filename, 'wb') as outp:  # Overwrites any existing file.
-                    navis.write_json(mapped_skel, outp)
-                connector_table.to_csv(filename_connector)
-                np.savetxt(os.path.join(target_path, str(skel.id) + '_save.txt'), np.unique(np.asarray(mapped_skel.nodes[:]['seg_id'])), fmt='%d')
-
-
-
-
+    for file_gt_skel in file_gt_skels:
+        gt_skel = navis.read_json(os.path.join(flywire_skel_path, file_gt_skel))
+        gt_skel = gt_skel[0]
+        filename = os.path.join(target_tree_path, str(gt_skel.id) + '.json')
+        if not os.path.exists(filename):
+            print(f'building segment tree for {gt_skel.id}')
+            mapped_skel = mapping_segments(gt_skel, vol_ffn1)
+            connector_table = get_connector(mapped_skel)
+            filename_connector = os.path.join(target_connector_path, str(gt_skel.id) + '_connector.csv')
+            navis.write_json(mapped_skel, filename, default=default_dump)
+            connector_table.to_csv(filename_connector)
+            np.savetxt(os.path.join(visualization_path, str(gt_skel.id) + '_save.txt'),
+                       np.unique(np.asarray(mapped_skel.nodes[:]['seg_id'])), fmt='%d')
