@@ -6,6 +6,6 @@ pip install -U numpy -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip3 install fafbseg cilog ipywidgets -i https://pypi.tuna.tsinghua.edu.cn/simple
 export http_proxy="http://192.168.16.5:3128"
 apt install libgl1-mesa-glx -y
-cd /braindat/lab/liusl/flywire || exit
+cd /code || exit
 mv sh/sharded.py /usr/local/lib/python3.8/dist-packages/cloudvolume/datasource/precomputed/skeleton/sharded.py
 

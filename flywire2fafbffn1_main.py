@@ -10,6 +10,7 @@ from cilog import create_logger
 from utils import default_dump
 from cloudvolume.datasource.precomputed.skeleton.sharded import ShardedPrecomputedSkeletonSource
 import pickle
+from matplotlib import pyplot as plt
 import os
 import json
 
@@ -56,7 +57,7 @@ def chamfer_distance(x, y, metric='l2', direction='bi'):
     return chamfer_dist
 
 
-def prune_cell_body_fiber(x, method = 'betweenness', reroot_soma: bool = True, heal: bool = True,
+def prune_cell_body_fiber(x, method='betweenness', reroot_soma: bool = True, heal: bool = True,
                           threshold: float = 0.95, inplace: bool = False):
     """Prune neuron cell body fiber.
 
@@ -109,7 +110,8 @@ def prune_to_backbone(x):
     x = x.prune_by_strahler(to_prune=range(1, x.nodes.strahler_index.max()))
     return x
 
-def get_mapped_flywire_neuron(neuron_id, prune = 'cell_body_fiber'):
+
+def get_mapped_flywire_neuron(neuron_id, prune='cell_body_fiber'):
     """
     :param neuron_id:
     :return: mapped tree neurons of neuron_id, from flywire to fafbv14
@@ -152,12 +154,12 @@ def filter_by_distance(skel, seg_skels, missing, segment_node_dict):
     segment_distance_dict = {}
     # filter using google skeleton
     for s in seg_skels:
-        if len(segment_node_dict[s.id] ) >10:
+        if len(segment_node_dict[s.id]) > 10:
             continue
         nodes = s.vertices
-        d = chamfer_distance(points *[4, 4, 40], nodes, metric='l2', direction='y_to_x')
+        d = chamfer_distance(points * [4, 4, 40], nodes, metric='l2', direction='y_to_x')
         segment_distance_dict[s.id] = d
-        if d > 2* np.mean(skel.nodes['radius'][segment_node_dict[s.id]]):
+        if d > 2 * np.mean(skel.nodes['radius'][segment_node_dict[s.id]]):
             filter_id.append(s.id)
         # if d > 1000:
         #     filter_id.append(int(s.id))
@@ -182,10 +184,29 @@ def filter_by_distance(skel, seg_skels, missing, segment_node_dict):
     n_node_before_filter = skel.n_nodes
     background_nodes = segment_node_dict[0]
     for seg_id in filter_id:
-        navis.remove_nodes(skel, skel.nodes['node_id'][segment_node_dict[seg_id]], inplace=True)
+        node_ids = skel.nodes['node_id'][segment_node_dict[seg_id]]
+        for node in node_ids:
+            if skel.nodes['parent_id'][skel.nodes['node_id'] == node].item() == -1 \
+                    and len(np.where(skel.nodes['parent_id'] == node)[0]) > 1:
+                print(f'Branching root node {node} removing')
+                branch = np.where(skel.nodes['parent_id'] == node)[0]
+                navis.reroot_skeleton(skel, skel.nodes['node_id'][branch[0]], inplace=True)
+            navis.remove_nodes(skel, node, inplace=True)
         del segment_node_dict[seg_id]
     n_node_after_filter = skel.n_nodes
-    print(f'filtered {len(filter_id)} segments, removed {n_node_before_filter-n_node_after_filter} nodes ({len(background_nodes)} are background)')
+    print(
+        f'filtered {len(filter_id)} segments, removed {n_node_before_filter - n_node_after_filter} nodes ({len(background_nodes)} are background)')
+
+
+def segment_weight(segment_node_dict):
+    """
+    :param segment_node_dict: segments -> nodes
+    :return: segment_weight_dict: segments -> number of nodes
+    """
+    segment_weight_dict = {}
+    for seg_id in segment_node_dict:
+        segment_weight_dict[seg_id] = len(segment_node_dict[seg_id])
+    return segment_weight_dict
 
 
 def mapping_segments(skel, vol_ffn1):
@@ -211,6 +232,8 @@ def mapping_segments(skel, vol_ffn1):
     # print(missing)
 
     filter_by_distance(skel, seg_skels, missing, segment_node_dict)
+    skel.segment_length = segment_weight(segment_node_dict)
+
     # replace the node with neibors
     # for n in segment_node_dict[s.id]:
     #     node_id = skel.nodes['node_id'][n]
@@ -225,52 +248,66 @@ def mapping_segments(skel, vol_ffn1):
     return skel
 
 
-def connection_weight():
-    pass
+def connection_weight(skel, node0, node1):
+    """
+    Compute connection length of the two directions by cutting the tree
+    :param skel: mapped tree neuron
+    :param edge: connector
+    :return: connection length of the two directions
+    """
+    for subtree in skel.subtrees:
+        if node0 and node1 in subtree:
+            if navis.distal_to(skel, node0, node1):
+                sub_tree0, sub_tree1 = navis.cut_skeleton(skel, node0)
+                return sub_tree0.n_nodes, sub_tree1.n_nodes - 1
+            else:
+                sub_tree1, sub_tree0 = navis.cut_skeleton(skel, node1)
+                return sub_tree0.n_nodes - 1, sub_tree1.n_nodes
+    print(f'#E#cannot find {node0} in {skel.id}')
 
 
 def get_connector(skel):
     """
-
     :param skel: mapped tree neuron
-    :return: connector table, wrapped nodes filtered
+    :return: connector table, wrapped nodes filtered by connection record (all_connection)
     """
-    connector_table = {'node1_id': [], 'node2_id': [], 'node1_cord': [], 'node2_cord': [], 'node1_segid': [],
-                       'node2_segid': [], 'Strahler order': []}
+    connector_table = {'node0_id': [], 'node1_id': [], 'node0_cord': [], 'node1_cord': [], 'node0_segid': [],
+                       'node1_segid': [], 'node0_weight': [], 'node1_weight': [], 'Strahler order': []}
     connector_table = pd.DataFrame(connector_table)
     all_connection = []
     for edge in skel.edges:
-        node1 = skel.nodes['node_id'] == edge[0]
-        node2 = skel.nodes['node_id'] == edge[1]
-        all_connection.append([skel.nodes['seg_id'][node1].item(), skel.nodes['seg_id'][node2].item()])
+        node0 = skel.nodes['node_id'] == edge[0]
+        node1 = skel.nodes['node_id'] == edge[1]
+        all_connection.append([skel.nodes['seg_id'][node0].item(), skel.nodes['seg_id'][node1].item()])
     for edge in skel.edges:
-        node1 = skel.nodes['node_id'] == edge[0]
-        node2 = skel.nodes['node_id'] == edge[1]
-        if skel.nodes['seg_id'][node1].item() != skel.nodes['seg_id'][node2].item():
-            if [skel.nodes['seg_id'][node2].item(), skel.nodes['seg_id'][node1].item()] not in all_connection:
+        node0 = skel.nodes['node_id'] == edge[0]
+        node1 = skel.nodes['node_id'] == edge[1]
+        if skel.nodes['seg_id'][node0].item() != skel.nodes['seg_id'][node1].item():
+            if [skel.nodes['seg_id'][node1].item(), skel.nodes['seg_id'][node0].item()] not in all_connection:
                 # filter wrapped connector
+                weight0, weight1 = connection_weight(skel, edge[0], edge[1])
                 connector_table.loc[len(connector_table.index)] = [edge[0], edge[1],
+                                                                   [skel.nodes['x'][node0].item(),
+                                                                    skel.nodes['y'][node0].item(),
+                                                                    skel.nodes['z'][node0].item()],
                                                                    [skel.nodes['x'][node1].item(),
                                                                     skel.nodes['y'][node1].item(),
                                                                     skel.nodes['z'][node1].item()],
-                                                                   [skel.nodes['x'][node2].item(),
-                                                                    skel.nodes['y'][node2].item(),
-                                                                    skel.nodes['z'][node2].item()],
+                                                                   skel.nodes['seg_id'][node0].item(),
                                                                    skel.nodes['seg_id'][node1].item(),
-                                                                   skel.nodes['seg_id'][node2].item(),
-                                                                   skel.nodes.strahler_index[node2]]
+                                                                   weight0, weight1,
+                                                                   skel.nodes.strahler_index[node1]]
     return connector_table
 
 
 if __name__ == "__main__":
-    create_logger(name='l1', file='/braindat/lab/liusl/flywire/log/flywire2fafbffn1.log', sub_print=False)
+    create_logger(name='l1', file='/braindat/lab/liusl/flywire/log/flywire2fafbffn.log', sub_print=True)
     target_tree_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/tree_data'
     target_connector_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/connector_data'
     visualization_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/visualization'
 
     vol_ffn1 = CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0', cache=True, parallel=True)  #
-    # vol_ffn1skel = CloudVolume('precomputed://gs://fafb-ffn1-20190805/segmentation', use_https=True, parallel=True)
-    # vol_ffn1skel.parallel = 4
+    vol_ffn1.parallel = 8
     vol_ffn1.meta.info['skeletons'] = 'skeletons_32nm'
     vol_ffn1.skeleton.meta.refresh_info()
     vol_ffn1.skeleton.meta.info['sharding']['hash'] = 'murmurhash3_x86_128'
@@ -282,6 +319,7 @@ if __name__ == "__main__":
     for file_gt_skel in file_gt_skels:
         gt_skel = navis.read_json(os.path.join(flywire_skel_path, file_gt_skel))
         gt_skel = gt_skel[0]
+        gt_skel.soma = None
         filename = os.path.join(target_tree_path, str(gt_skel.id) + '.json')
         if not os.path.exists(filename):
             print(f'building segment tree for {gt_skel.id}')
@@ -290,5 +328,5 @@ if __name__ == "__main__":
             filename_connector = os.path.join(target_connector_path, str(gt_skel.id) + '_connector.csv')
             navis.write_json(mapped_skel, filename, default=default_dump)
             connector_table.to_csv(filename_connector)
-            np.savetxt(os.path.join(visualization_path, str(gt_skel.id) + '_save.txt'),
-                       np.unique(np.asarray(mapped_skel.nodes[:]['seg_id'])), fmt='%d')
+            visualize = pd.DataFrame(mapped_skel.segment_length, index=[0])
+            visualize.to_csv(os.path.join(visualization_path, str(gt_skel.id) + '_save.csv'))
