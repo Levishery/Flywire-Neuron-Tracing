@@ -7,5 +7,5 @@ pip3 install fafbseg cilog ipywidgets -i https://pypi.tuna.tsinghua.edu.cn/simpl
 export http_proxy="http://192.168.16.5:3128"
 apt install libgl1-mesa-glx -y
 cd /code || exit
-mv sh/sharded.py /usr/local/lib/python3.8/dist-packages/cloudvolume/datasource/precomputed/skeleton/sharded.py
+mv /code/sh/sharded.py /usr/local/lib/python3.8/dist-packages/cloudvolume/datasource/precomputed/skeleton/sharded.py
 

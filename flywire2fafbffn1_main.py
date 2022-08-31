@@ -140,7 +140,7 @@ def get_mapped_flywire_neuron(neuron_id, prune='cell_body_fiber'):
     return mapped_skels
 
 
-def filter_by_distance(skel, seg_skels, missing, segment_node_dict):
+def filter_by_distance(skel, seg_skels, missing, segment_index_dict, segment_node_dict):
     """
     filter segments that accidentally mapped to the segment tree
     :param skel: segment tree to filter
@@ -154,12 +154,12 @@ def filter_by_distance(skel, seg_skels, missing, segment_node_dict):
     segment_distance_dict = {}
     # filter using google skeleton
     for s in seg_skels:
-        if len(segment_node_dict[s.id]) > 10:
+        if len(segment_index_dict[s.id]) > 10:
             continue
         nodes = s.vertices
         d = chamfer_distance(points * [4, 4, 40], nodes, metric='l2', direction='y_to_x')
         segment_distance_dict[s.id] = d
-        if d > 2 * np.mean(skel.nodes['radius'][segment_node_dict[s.id]]):
+        if d > 2 * np.mean(skel.nodes['radius'][segment_index_dict[s.id]]):
             filter_id.append(s.id)
         # if d > 1000:
         #     filter_id.append(int(s.id))
@@ -184,12 +184,13 @@ def filter_by_distance(skel, seg_skels, missing, segment_node_dict):
     n_node_before_filter = skel.n_nodes
     background_nodes = segment_node_dict[0]
     for seg_id in filter_id:
-        node_ids = skel.nodes['node_id'][segment_node_dict[seg_id]]
+        node_ids = segment_node_dict[seg_id]
         for node in node_ids:
             if skel.nodes['parent_id'][skel.nodes['node_id'] == node].item() == -1 \
                     and len(np.where(skel.nodes['parent_id'] == node)[0]) > 1:
                 print(f'Branching root node {node} removing')
-                branch = np.where(skel.nodes['parent_id'] == node)[0]
+                # pandas series: note difference between series.index and slice. np.where return slice, not index
+                branch = skel.nodes['parent_id'][skel.nodes['parent_id'].values == node].index
                 navis.reroot_skeleton(skel, skel.nodes['node_id'][branch[0]], inplace=True)
             navis.remove_nodes(skel, node, inplace=True)
         del segment_node_dict[seg_id]
@@ -217,21 +218,25 @@ def mapping_segments(skel, vol_ffn1):
     """
     skel = skel.copy()
     segment_node_dict = {}
+    segment_index_dict = {}
     skel.nodes['seg_id'] = np.zeros(skel.nodes['x'].shape)
+    # save node_id because the index will change if reroot.
     for node in tqdm(range(skel.n_nodes)):
         seg_id = vol_ffn1[skel.nodes['x'][node] / 4, skel.nodes['y'][node] / 4, skel.nodes['z'][node]].item()
         skel.nodes['seg_id'][node] = seg_id
         if seg_id in segment_node_dict:
-            segment_node_dict[seg_id].append(node)
+            segment_node_dict[seg_id].append(skel.nodes['node_id'][node])
+            segment_index_dict[seg_id].append(node)
         else:
-            segment_node_dict[seg_id] = [node]
+            segment_node_dict[seg_id] = [skel.nodes['node_id'][node]]
+            segment_index_dict[seg_id] = [node]
 
     ids = np.unique(np.asarray(skel.nodes[:]['seg_id']))
     print(f'#D#Before filtering: {len(ids)}')
     seg_skels, missing = vol_ffn1.skeleton.get(ids)
     # print(missing)
 
-    filter_by_distance(skel, seg_skels, missing, segment_node_dict)
+    filter_by_distance(skel, seg_skels, missing, segment_index_dict, segment_node_dict)
     skel.segment_length = segment_weight(segment_node_dict)
 
     # replace the node with neibors
@@ -326,6 +331,9 @@ if __name__ == "__main__":
             mapped_skel = mapping_segments(gt_skel, vol_ffn1)
             connector_table = get_connector(mapped_skel)
             filename_connector = os.path.join(target_connector_path, str(gt_skel.id) + '_connector.csv')
+            # check if connector contains only segments maintained after filtering (connectors build based on tree data)
+            assert set(connector_table['node0_segid'].values.astype(int)) | \
+                   set(connector_table['node1_segid'].values.astype(int)) < set(mapped_skel.segment_length.keys())
             navis.write_json(mapped_skel, filename, default=default_dump)
             connector_table.to_csv(filename_connector)
             visualize = pd.DataFrame(mapped_skel.segment_length, index=[0])
