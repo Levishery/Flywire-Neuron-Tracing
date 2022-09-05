@@ -2,11 +2,13 @@ import fafbseg
 import navis
 from tqdm import tqdm
 import numpy as np
+import random
 import pandas as pd
 import networkx as nx
 from cloudvolume import CloudVolume
 from sklearn.neighbors import NearestNeighbors
 from cilog import create_logger
+import time
 from utils import default_dump
 from cloudvolume.datasource.precomputed.skeleton.sharded import ShardedPrecomputedSkeletonSource
 import pickle
@@ -128,7 +130,7 @@ def get_mapped_flywire_neuron(neuron_id, prune='cell_body_fiber'):
         try:
             s.nodes = navis.xform_brain(s.nodes, source='FLYWIRE', target='FAFB14raw', verbose=False)
         except:
-            print(f'#W#cannot convert {s.name}')
+            print(f'#W#cannot convert {s.id}')
             continue
         # s = navis.TreeNeuron.get_graph_nx(s)
         if prune == 'cell_body_fiber':
@@ -159,7 +161,8 @@ def filter_by_distance(skel, seg_skels, missing, segment_index_dict, segment_nod
         nodes = s.vertices
         d = chamfer_distance(points * [4, 4, 40], nodes, metric='l2', direction='y_to_x')
         segment_distance_dict[s.id] = d
-        if d > 2 * np.mean(skel.nodes['radius'][segment_index_dict[s.id]]):
+        if d > 2 * np.mean(skel.nodes['radius'][segment_index_dict[s.id]]) or \
+                (len(nodes) > 6 and len(segment_index_dict[s.id]) < 2):
             filter_id.append(s.id)
         # if d > 1000:
         #     filter_id.append(int(s.id))
@@ -188,7 +191,7 @@ def filter_by_distance(skel, seg_skels, missing, segment_index_dict, segment_nod
         for node in node_ids:
             if skel.nodes['parent_id'][skel.nodes['node_id'] == node].item() == -1 \
                     and len(np.where(skel.nodes['parent_id'] == node)[0]) > 1:
-                print(f'Branching root node {node} removing')
+                print(f'#I#Branching root node {node} removing')
                 # pandas series: note difference between series.index and slice. np.where return slice, not index
                 branch = skel.nodes['parent_id'][skel.nodes['parent_id'].values == node].index
                 navis.reroot_skeleton(skel, skel.nodes['node_id'][branch[0]], inplace=True)
@@ -196,7 +199,7 @@ def filter_by_distance(skel, seg_skels, missing, segment_index_dict, segment_nod
         del segment_node_dict[seg_id]
     n_node_after_filter = skel.n_nodes
     print(
-        f'filtered {len(filter_id)} segments, removed {n_node_before_filter - n_node_after_filter} nodes ({len(background_nodes)} are background)')
+        f'#I#filtered {len(filter_id)} segments, removed {n_node_before_filter - n_node_after_filter} nodes ({len(background_nodes)} are background)')
 
 
 def segment_weight(segment_node_dict):
@@ -221,7 +224,7 @@ def mapping_segments(skel, vol_ffn1):
     segment_index_dict = {}
     skel.nodes['seg_id'] = np.zeros(skel.nodes['x'].shape)
     # save node_id because the index will change if reroot.
-    for node in tqdm(range(skel.n_nodes)):
+    for node in range(skel.n_nodes):
         seg_id = vol_ffn1[skel.nodes['x'][node] / 4, skel.nodes['y'][node] / 4, skel.nodes['z'][node]].item()
         skel.nodes['seg_id'][node] = seg_id
         if seg_id in segment_node_dict:
@@ -232,7 +235,7 @@ def mapping_segments(skel, vol_ffn1):
             segment_index_dict[seg_id] = [node]
 
     ids = np.unique(np.asarray(skel.nodes[:]['seg_id']))
-    print(f'#D#Before filtering: {len(ids)}')
+    print(f'#I#Before filtering: {len(ids)}')
     seg_skels, missing = vol_ffn1.skeleton.get(ids)
     # print(missing)
 
@@ -291,7 +294,8 @@ def get_connector(skel):
             if [skel.nodes['seg_id'][node1].item(), skel.nodes['seg_id'][node0].item()] not in all_connection:
                 # filter wrapped connector
                 weight0, weight1 = connection_weight(skel, edge[0], edge[1])
-                connector_table.loc[len(connector_table.index)] = [edge[0], edge[1],
+                try:
+                    connector_table.loc[len(connector_table.index)] = [edge[0], edge[1],
                                                                    [skel.nodes['x'][node0].item(),
                                                                     skel.nodes['y'][node0].item(),
                                                                     skel.nodes['z'][node0].item()],
@@ -302,11 +306,14 @@ def get_connector(skel):
                                                                    skel.nodes['seg_id'][node1].item(),
                                                                    weight0, weight1,
                                                                    skel.nodes.strahler_index[node1]]
+                except:
+                    print(f'#W#Maybe is not neuron!')
+                    return None
     return connector_table
 
 
 if __name__ == "__main__":
-    create_logger(name='l1', file='/braindat/lab/liusl/flywire/log/flywire2fafbffn.log', sub_print=True)
+    create_logger(name='l1', file='/braindat/lab/liusl/flywire/log/flywire2fafbffn_debug3.log', sub_print=True, file_level='DEBUG')
     target_tree_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/tree_data'
     target_connector_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/connector_data'
     visualization_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/visualization'
@@ -320,21 +327,33 @@ if __name__ == "__main__":
 
     flywire_skel_path = '/braindat/lab/liusl/flywire/gt_skel'
     file_gt_skels = os.listdir(flywire_skel_path)
+    random.shuffle(file_gt_skels)
     # get k neurons per iter
     for file_gt_skel in file_gt_skels:
+        vol_ffn1.cache.flush()
         gt_skel = navis.read_json(os.path.join(flywire_skel_path, file_gt_skel))
         gt_skel = gt_skel[0]
+        if gt_skel.n_nodes < 100:
+            print(f'#W#{gt_skel.id} is not a neuron.')
+            continue
         gt_skel.soma = None
         filename = os.path.join(target_tree_path, str(gt_skel.id) + '.json')
         if not os.path.exists(filename):
-            print(f'building segment tree for {gt_skel.id}')
+            print(f'#I#building segment tree for {gt_skel.id}')
+            start = time.time()
             mapped_skel = mapping_segments(gt_skel, vol_ffn1)
+            map_time = time.time()
+            print(f'#D#mapping time {map_time-start}')
             connector_table = get_connector(mapped_skel)
+            con_time = time.time()
+            print(f'#D#connector computing time {con_time - map_time}')
             filename_connector = os.path.join(target_connector_path, str(gt_skel.id) + '_connector.csv')
-            # check if connector contains only segments maintained after filtering (connectors build based on tree data)
-            assert set(connector_table['node0_segid'].values.astype(int)) | \
-                   set(connector_table['node1_segid'].values.astype(int)) < set(mapped_skel.segment_length.keys())
             navis.write_json(mapped_skel, filename, default=default_dump)
-            connector_table.to_csv(filename_connector)
-            visualize = pd.DataFrame(mapped_skel.segment_length, index=[0])
-            visualize.to_csv(os.path.join(visualization_path, str(gt_skel.id) + '_save.csv'))
+            if connector_table is not None:
+                # check if connector contains only segments maintained after filtering (connectors build based on tree data)
+                assert set(connector_table['node0_segid'].values.astype(int)) | \
+                       set(connector_table['node1_segid'].values.astype(int)) < set(mapped_skel.segment_length.keys())
+                connector_table.to_csv(filename_connector)
+                visualize = pd.DataFrame(mapped_skel.segment_length, index=[0])
+                visualize.to_csv(os.path.join(visualization_path, str(gt_skel.id) + '_save.csv'))
+                print(f'#D#saving time {time.time() - con_time}')
