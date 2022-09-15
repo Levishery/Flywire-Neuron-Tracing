@@ -156,7 +156,7 @@ def filter_by_distance(skel, seg_skels, missing, segment_index_dict, segment_nod
     segment_distance_dict = {}
     # filter using google skeleton
     for s in seg_skels:
-        if len(segment_index_dict[s.id]) > 10:
+        if len(segment_index_dict[s.id]) > 40:
             continue
         nodes = s.vertices
         d = chamfer_distance(points * [4, 4, 40], nodes, metric='l2', direction='y_to_x')
