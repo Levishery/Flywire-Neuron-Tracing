@@ -1,0 +1,19 @@
+# learn dense 3d image embedding with anisotropy swinUnetr
+MODEL:
+  INPUT_SIZE: [ 32, 160,160 ]
+  OUTPUT_SIZE: [ 32, 160, 160 ]
+  OUT_PLANES: 1
+  TARGET_OPT: ["0"]
+  LOSS_OPTION: [["WeightedBCEWithLogitsLoss"]]
+  LOSS_WEIGHT: [[1.0]]
+  WEIGHT_OPT: [["1"]]
+  OUTPUT_ACT: [["none"]]
+  ARCHITECTURE: swin_unetr
+  ISOTROPY: [True, False, False, False, True]
+  POOLING_LAYER: True  # used in unet
+DATASET:
+  OUTPUT_PATH: /data12T/janechen/SNEMI_UNet
+INFERENCE:
+  OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
+  OUTPUT_NAME: result.h5
+  OUTPUT_ACT: [ "sigmoid", "sigmoid"]

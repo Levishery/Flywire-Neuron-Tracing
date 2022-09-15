@@ -1,0 +1,21 @@
+# learn dense 3d image embedding with V-net
+MODEL:
+  ARCHITECTURE: unet_3d
+  BLOCK_TYPE: residual_se
+  FILTERS: [32, 64, 96, 128, 160]
+  OUT_PLANES: 13
+  TARGET_OPT: ["2", "8"]
+  LOSS_OPTION:
+    [
+      [ "WeightedBCEWithLogitsLoss", "DiceLoss" ],
+      [ "WeightedMSE" ],
+    ]
+  LOSS_WEIGHT: [ [ 1.0, 0.5 ], [ 1.0 ] ]
+  WEIGHT_OPT: [ [ "1", "0" ], [ "0" ] ]
+  OUTPUT_ACT: [[ "none", "sigmoid" ], [ "sigmoid" ]]
+DATASET:
+  OUTPUT_PATH: /data12T/janechen/SNEMI_UNet
+INFERENCE:
+  OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
+  OUTPUT_NAME: result.h5
+  OUTPUT_ACT: [ "sigmoid", "sigmoid"]
