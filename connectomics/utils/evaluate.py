@@ -512,3 +512,14 @@ def confusion_matrix_visualize(pred, gt, thres=0.5):
     img_colored = img_rgb_tp + img_rgb_fp + img_rgb_fn + img_rgb_tn
     img_colored = img_colored.transpose((1, 2, 3, 0))  # # c,z,y,x - > z,y,x,c
     return img_colored
+
+def emb2rgb(x_emb):
+    x_emb = x_emb.squeeze(0)
+    x_emb = np.array(x_emb.cpu())
+    shape = x_emb.shape
+    pca = PCA(n_components=3)
+    x_emb = np.transpose(x_emb, [1, 2, 0])
+    x_emb = x_emb.reshape(-1, 16)
+    new_emb = pca.fit_transform(x_emb)
+    new_emb = new_emb.reshape(shape[-2], shape[-1], 3)
+    return new_emb

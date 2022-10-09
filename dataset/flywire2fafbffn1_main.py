@@ -156,7 +156,7 @@ def filter_by_distance(skel, seg_skels, missing, segment_index_dict, segment_nod
     segment_distance_dict = {}
     # filter using google skeleton
     for s in seg_skels:
-        if len(segment_index_dict[s.id]) > 40:
+        if len(segment_index_dict[s.id]) > 80:
             continue
         nodes = s.vertices
         d = chamfer_distance(points * [4, 4, 40], nodes, metric='l2', direction='y_to_x')
@@ -305,7 +305,7 @@ def get_connector(skel):
                                                                    skel.nodes['seg_id'][node0].item(),
                                                                    skel.nodes['seg_id'][node1].item(),
                                                                    weight0, weight1,
-                                                                   skel.nodes.strahler_index[node1]]
+                                                                   skel.nodes.strahler_index[node1].item()]
                 except:
                     print(f'#W#Maybe is not neuron!')
                     return None

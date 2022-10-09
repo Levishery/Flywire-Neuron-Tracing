@@ -4,17 +4,22 @@ MODEL:
   BLOCK_TYPE: residual_se
   FILTERS: [32, 64, 96, 128, 160]
   OUT_PLANES: 13
-  TARGET_OPT: ["2", "8"]
+  TARGET_OPT: ["2", "9"]
   LOSS_OPTION:
     [
       [ "WeightedBCEWithLogitsLoss", "DiceLoss" ],
-      [ "WeightedMSE" ],
+      [ "DiscriminativeLoss" ],
     ]
   LOSS_WEIGHT: [ [ 1.0, 0.5 ], [ 1.0 ] ]
   WEIGHT_OPT: [ [ "1", "0" ], [ "0" ] ]
-  OUTPUT_ACT: [[ "none", "sigmoid" ], [ "sigmoid" ]]
+  OUTPUT_ACT: [[ "none", "sigmoid" ], [ "none" ]]
 DATASET:
-  OUTPUT_PATH: /data12T/janechen/SNEMI_UNet
+  IMAGE_NAME: im_Atrain.h5@im_Btrain.h5@im_Ctrain.h5
+  LABEL_NAME: syn_Atrain.h5@syn_Btrain.h5@syn_Ctrain.h5
+  VAL_IMAGE_NAME: im_Aval.h5@im_Bval.h5@im_Cval.h5
+  VAL_LABEL_NAME: syn_Aval.h5@syn_Bval.h5@syn_Cval.h5
+  INPUT_PATH: /braindat/lab/liusl/cremi/train_93-32_vali
+  OUTPUT_PATH: /output/logs
 INFERENCE:
   OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
   OUTPUT_NAME: result.h5
