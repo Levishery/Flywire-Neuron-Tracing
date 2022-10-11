@@ -163,6 +163,8 @@ _C.DATASET.LABEL_MAG = 0
 _C.DATASET.DO_CHUNK_TITLE = 0
 # multi-volume
 _C.DATASET.DO_MULTI_VOLUME = False
+# sample connector from csv files
+_C.DATASET.CONNECTOR_DATSET = False
 
 # Chunk parameters for tile format: chunk_num (z,y,x), chunk_stride
 _C.DATASET.DATA_CHUNK_NUM = [1, 1, 1]

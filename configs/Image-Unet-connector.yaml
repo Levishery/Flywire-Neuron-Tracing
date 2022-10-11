@@ -1,0 +1,30 @@
+# learn dense 3d image embedding with V-net
+MODEL:
+  ARCHITECTURE: unet_3d
+  BLOCK_TYPE: residual_se
+  FILTERS: [32, 64, 96, 128, 160]
+  OUT_PLANES: 19
+  TARGET_OPT: ["2", "e"]
+  LOSS_OPTION:
+    [
+      [ "WeightedBCEWithLogitsLoss", "DiceLoss" ],
+      [ "DiscriminativeLoss" ],
+    ]
+  LOSS_WEIGHT: [ [ 1.0, 0.5 ], [ 1.0 ] ]
+  WEIGHT_OPT: [ [ "1", "0" ], [ "0" ] ]
+  OUTPUT_ACT: [[ "none", "sigmoid" ], [ "none" ]]
+MONITOR:
+  ITERATION_NUM: [20, 200]
+DATASET:
+  CONNECTOR_DATSET: True
+  IMAGE_NAME:
+  LABEL_NAME:
+  VAL_IMAGE_NAME:
+  VAL_LABEL_NAME:
+  VAL_PATH: /braindat/lab/liusl/flywire/block_data/val_30
+  INPUT_PATH: /braindat/lab/liusl/flywire/block_data/train_30
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet-connector
+INFERENCE:
+  OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
+  OUTPUT_NAME: result.h5
+  OUTPUT_ACT: [ "sigmoid", "sigmoid"]

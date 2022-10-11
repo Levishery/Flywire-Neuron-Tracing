@@ -2,10 +2,12 @@
 MODEL:
   INPUT_SIZE: [ 32, 160,160 ]
   OUTPUT_SIZE: [ 32, 160, 160 ]
+#  INPUT_SIZE: [ 28, 128,128 ]
+#  OUTPUT_SIZE: [ 28, 128, 128 ]
   ARCHITECTURE: swin_unetr
   ISOTROPY: [True, False, False, False, True]
   POOLING_LAYER: True  # used in unet
-  OUT_PLANES: 35
+  OUT_PLANES: 19
   TARGET_OPT: ["2", "e"]
   LOSS_OPTION:
     [
@@ -16,7 +18,7 @@ MODEL:
   WEIGHT_OPT: [ [ "1", "0" ], [ "0" ] ]
   OUTPUT_ACT: [[ "none", "sigmoid" ], [ "none" ]]
 MONITOR:
-  ITERATION_NUM: [20, 20]
+  ITERATION_NUM: [20, 200]
 SOLVER:
 #  LR_SCHEDULER_NAME: "MultiStepLR"
   BASE_LR: 2e-3
@@ -35,7 +37,7 @@ DATASET:
   VAL_IMAGE_NAME: im_Aval.h5@im_Bval.h5@im_Cval.h5
   VAL_LABEL_NAME: neuron_A_val.h5@neuron_B_val.h5@neuron_C_val.h5
   INPUT_PATH: /braindat/lab/liusl/cremi/train_93-32_vali
-  OUTPUT_PATH: /output/logs
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-swin
 INFERENCE:
   OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
   OUTPUT_NAME: result.h5

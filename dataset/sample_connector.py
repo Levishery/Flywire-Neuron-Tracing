@@ -41,10 +41,10 @@ target_tree_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/tree_data'
 target_connector_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/connector_data'
 visualization_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/visualization'
 connector_files = os.listdir(target_connector_path)
-block_connector = '/braindat/lab/liusl/flywire/block_data/30_percent'
-thresh = 10
+block_connector = '/braindat/lab/liusl/flywire/block_data/2_percent'
+thresh = 60
 
-for connector_f in tqdm(connector_files[15649:]):
+for connector_f in tqdm(connector_files):
     # block_list = define_block_list()
     visualization_f = connector_f.replace('_connector.csv', '_save.csv')
     neuron_id = visualization_f[:-9]

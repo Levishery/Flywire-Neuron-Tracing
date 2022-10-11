@@ -17,7 +17,7 @@ DATASET:
   VAL_IMAGE_NAME: im_Aval.h5@im_Bval.h5@im_Cval.h5
   VAL_LABEL_NAME: neuron_A_val.h5@neuron_B_val.h5@neuron_C_val.h5
   INPUT_PATH: /braindat/lab/liusl/cremi/train_93-32_vali
-  OUTPUT_PATH: /output/logs
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet-metric-only
 INFERENCE:
   OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
   OUTPUT_NAME: result.h5

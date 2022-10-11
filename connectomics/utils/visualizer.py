@@ -56,7 +56,7 @@ class Visualizer(object):
                 label[idx] = temp_label / temp_label.max() + 1e-6
             if topt[0] == 'e':
                 output[idx] = self.emb2rgb(output[idx])
-
+                label[idx] = label[idx] / label[idx].max() + 1e-6
             RGB = (topt[0] in ['1', '2', '9', 'e'])
             vis_name = self.cfg.MODEL.TARGET_OPT[idx] + '_' + str(idx)
             if suffix is not None:
@@ -157,12 +157,13 @@ class Visualizer(object):
     def emb2rgb(self, x_emb):
         # x_emb = x_emb.squeeze(0)
         x_emb = np.array(x_emb.detach().cpu())
-        shape = x_emb.shape
+        shape = x_emb.shape  # b,e,d,h,w
         pca = PCA(n_components=3)
-        x_emb = np.transpose(x_emb, [0, 2, 3, 4, 1])
-        x_emb = x_emb.reshape(-1, 32)
-        new_emb = pca.fit_transform(x_emb)
-        new_emb = new_emb.reshape(shape[0], 3, shape[2], shape[3], shape[4])
+        x_emb = np.transpose(x_emb, [0, 2, 3, 4, 1])  # b,d,h,w,e
+        x_emb = x_emb.reshape(-1, 16)  # b*d*h*w,e
+        new_emb = pca.fit_transform(x_emb)  # b*d*h*w,3
+        new_emb = new_emb.reshape(shape[0], shape[2], shape[3], shape[4], 3)  # b,d,h,w,3
+        new_emb = np.transpose(new_emb, [0, 4, 1, 2, 3])
         new_emb = torch.tensor(new_emb)
         return new_emb
 

@@ -1,7 +1,7 @@
 # All other configurations are set by default. If you want to add new config options,
 # please modify ../connectomics/config/defaults.py
 SYSTEM:
-  NUM_GPUS: 1
+  NUM_GPUS: 2
   NUM_CPUS: 4
 MODEL:
   INPUT_SIZE: [17, 227, 227]
