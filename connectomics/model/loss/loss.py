@@ -240,8 +240,8 @@ class DiscriminativeLoss(nn.Module):
         reg_loss = torch.tensor(0, dtype=embedding.dtype, device=embedding.device)
 
         for b in range(batch_size):
-            embedding_b = embedding[b]  # (embed_dim, H, W)
-            seg_gt_b = seg_gt[b]
+            embedding_b = embedding[b]  # (embed_dim, D, H, W)
+            seg_gt_b = seg_gt[b].squeeze()
 
             labels = torch.unique(seg_gt_b)
             labels = labels[labels != 0]
@@ -281,7 +281,6 @@ class DiscriminativeLoss(nn.Module):
 
                 # divided by two for double calculated loss above, for implementation convenience
                 dist_loss = dist_loss + torch.sum(F.relu(-dist + self.delta_d) ** 2) / (num_id * (num_id - 1)) / 2
-
             # reg_loss is not used in original paper
             reg_loss = reg_loss + torch.mean(torch.norm(centroid_mean, dim=1))
 
@@ -292,6 +291,6 @@ class DiscriminativeLoss(nn.Module):
         Loss = self.alpha * var_loss + self.beta * dist_loss + self.gama * reg_loss
         return Loss
 
-    def forward(self, pred, target):
+    def forward(self, pred, target, weight_mask=None):
         loss = self.discriminative_loss(pred, target)
         return loss

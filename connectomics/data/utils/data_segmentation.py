@@ -325,6 +325,8 @@ def seg_to_targets(label_orig: np.ndarray,
             out[tid] = label.astype(np.int64)
         elif topt[0] == 'r':  # reconstruction
             out[tid] = normalize_image(label)[np.newaxis, :].astype(np.float32)
+        elif topt[0] == 'e':  # reconstruction
+            out[tid] = np.expand_dims(label.astype(np.int64), axis=0)
         else:
             raise NameError("Target option %s is not valid!" % topt[0])
 

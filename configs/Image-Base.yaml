@@ -4,8 +4,8 @@ SYSTEM:
   NUM_GPUS: 1
   NUM_CPUS: 4
 MODEL:
-  INPUT_SIZE: [17, 257, 257]
-  OUTPUT_SIZE: [17, 257, 257]
+  INPUT_SIZE: [17, 227, 227]
+  OUTPUT_SIZE: [17, 227, 227]
   IN_PLANES: 1
   OUT_PLANES: 3
   TARGET_OPT: ["2"] # '0': binary mask; '1': synaptic polarity; '2': affinity; '3': small object mask;
@@ -16,7 +16,7 @@ MODEL:
   LOSS_WEIGHT: [[1.0, 0.5]]
   WEIGHT_OPT: [["1", "0"]]
   OUTPUT_ACT: [["none", "sigmoid"]]
-  NORM_MODE: sync_bn
+  NORM_MODE: bn
 DATASET:
   IMAGE_NAME: train_image.tif
   LABEL_NAME: train_label.tif

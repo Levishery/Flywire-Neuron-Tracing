@@ -3,16 +3,12 @@ MODEL:
   ARCHITECTURE: unet_3d
   BLOCK_TYPE: residual_se
   FILTERS: [32, 64, 96, 128, 160]
-  OUT_PLANES: 19
-  TARGET_OPT: ["2", "e"]
-  LOSS_OPTION:
-    [
-      [ "WeightedBCEWithLogitsLoss", "DiceLoss" ],
-      [ "DiscriminativeLoss" ],
-    ]
-  LOSS_WEIGHT: [ [ 1.0, 0.5 ], [ 1.0 ] ]
-  WEIGHT_OPT: [ [ "1", "0" ], [ "0" ] ]
-  OUTPUT_ACT: [[ "none", "sigmoid" ], [ "none" ]]
+  OUT_PLANES: 16
+  TARGET_OPT: ["e"]
+  LOSS_OPTION: [[ "DiscriminativeLoss" ]]
+  LOSS_WEIGHT: [ [ 1.0 ] ]
+  WEIGHT_OPT: [ [ "0" ] ]
+  OUTPUT_ACT: [[ "none" ]]
 MONITOR:
   ITERATION_NUM: [20, 200]
 DATASET:
@@ -21,8 +17,8 @@ DATASET:
   VAL_IMAGE_NAME: im_Aval.h5@im_Bval.h5@im_Cval.h5
   VAL_LABEL_NAME: neuron_A_val.h5@neuron_B_val.h5@neuron_C_val.h5
   INPUT_PATH: /braindat/lab/liusl/cremi/train_93-32_vali
-  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet
+  OUTPUT_PATH: /output/logs
 INFERENCE:
   OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
   OUTPUT_NAME: result.h5
-  OUTPUT_ACT: [ "sigmoid", "sigmoid"]
+  OUTPUT_ACT: [ "none"]

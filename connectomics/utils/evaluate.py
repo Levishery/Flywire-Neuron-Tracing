@@ -7,6 +7,8 @@ __all__ = [
     'get_binary_jaccard',
 ]
 
+from sklearn.decomposition import PCA
+
 
 def adapted_rand(seg, gt, all_stats=False):
     """Compute Adapted Rand error as defined by the SNEMI3D contest [1]

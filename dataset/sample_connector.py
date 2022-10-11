@@ -44,31 +44,33 @@ connector_files = os.listdir(target_connector_path)
 block_connector = '/braindat/lab/liusl/flywire/block_data/30_percent'
 thresh = 10
 
-for connector_f in tqdm(connector_files):
+for connector_f in tqdm(connector_files[15649:]):
     # block_list = define_block_list()
     visualization_f = connector_f.replace('_connector.csv', '_save.csv')
     neuron_id = visualization_f[:-9]
-    tree_f = connector_f.replace('_connector.csv', '.json')
-    tree = navis.read_json(os.path.join(target_tree_path, tree_f))[0]
-    max_strahler_index = tree.nodes.strahler_index.max()
     df = pd.read_csv(os.path.join(target_connector_path, connector_f), index_col=0)
     df_weight = pd.read_csv(os.path.join(visualization_path, visualization_f), index_col=0)
+    if len(df) > 10:
+        tree_f = connector_f.replace('_connector.csv', '.json')
+        tree = navis.read_json(os.path.join(target_tree_path, tree_f))[0]
+        max_strahler_index = tree.nodes.strahler_index.max()
 
-    for i in df.index:
-        score1 = 1 / ((1 / min(df_weight[str(int(df['node1_segid'][i]))][0], 40)) * (
-                    1 / min(df_weight[str(int(df['node0_segid'][i]))][0], 40)))
-        score2 = (1 / (max_strahler_index - int(df['Strahler order'][i].split('\n')[0].split(' ')[-1]) + 3))
-        score = score2 * score1
-        if score > thresh:
-            cord0 = np.array(df['node0_cord'][i][1:-1].split(', ')).astype(float)
-            cord1 = np.array(df['node1_cord'][i][1:-1].split(', ')).astype(float)
-            cord = (cord0 + cord1) / 2
-            x_b, y_b, z_b = fafb_to_block(cord[0], cord[1], cord[2])
-            file_name = 'connector_' + str(x_b) + '_' + str(y_b) + '_' + str(z_b) + '.csv'
-            row = pd.DataFrame([{'node0_segid': int(df['node0_segid'][i]), 'node1_segid': int(df['node1_segid'][i]),
-                                'cord': cord, 'score': score, 'neuron_id': neuron_id}])
-            row.to_csv(os.path.join(block_connector, file_name), mode='a', header=True, index=False)
-
+        for i in df.index:
+            score1 = 1 / ((1 / min(df_weight[str(int(df['node1_segid'][i]))][0], 40)) * (
+                        1 / min(df_weight[str(int(df['node0_segid'][i]))][0], 40)))
+            score2 = (1 / (max_strahler_index - int(df['Strahler order'][i].split('\n')[0].split(' ')[-1]) + 3))
+            score = score2 * score1
+            if score > thresh:
+                cord0 = np.array(df['node0_cord'][i][1:-1].split(', ')).astype(float)
+                cord1 = np.array(df['node1_cord'][i][1:-1].split(', ')).astype(float)
+                cord = (cord0 + cord1) / 2
+                x_b, y_b, z_b = fafb_to_block(cord[0], cord[1], cord[2])
+                file_name = 'connector_' + str(x_b) + '_' + str(y_b) + '_' + str(z_b) + '.csv'
+                row = pd.DataFrame([{'node0_segid': int(df['node0_segid'][i]), 'node1_segid': int(df['node1_segid'][i]),
+                                    'cord': cord, 'score': score, 'neuron_id': neuron_id}])
+                row.to_csv(os.path.join(block_connector, file_name), mode='a', header=True, index=False)
+    else:
+        print('invalid neuron', neuron_id)
             # block_list[z_b][y_b][x_b].append([int(df['node0_segid'][i]), int(df['node1_segid'][i]),
             #                                                    cord, score, neuron_id])
         # for i in range(x_block):

@@ -5,6 +5,8 @@ import torch
 import torch.nn.functional as F
 import torchvision.utils as vutils
 import numpy as np
+from sklearn.decomposition import PCA
+
 from ..data.utils import decode_quantize
 from connectomics.model.utils import SplitActivation
 
@@ -52,8 +54,10 @@ class Visualizer(object):
                 temp_label = label[idx].copy().astype(np.float32)[
                     :, np.newaxis]
                 label[idx] = temp_label / temp_label.max() + 1e-6
+            if topt[0] == 'e':
+                output[idx] = self.emb2rgb(output[idx])
 
-            RGB = (topt[0] in ['1', '2', '9'])
+            RGB = (topt[0] in ['1', '2', '9', 'e'])
             vis_name = self.cfg.MODEL.TARGET_OPT[idx] + '_' + str(idx)
             if suffix is not None:
                 vis_name = vis_name + '_' + suffix
@@ -90,6 +94,8 @@ class Visualizer(object):
             if temp.shape[1] == 2: # 2d affinity map has two channels
                 temp = torch.cat([temp, torch.zeros(
                     sz[0], 1, sz[2], sz[3]).type(temp.dtype)], dim=1)
+            if temp.shape[1] == 1: # original label has one channels
+                temp = torch.cat([temp, temp, temp], dim=1)
             return temp
 
         if RGB:
@@ -147,6 +153,18 @@ class Visualizer(object):
             pred = pred.permute(0, 4, 1, 2, 3)
 
         return pred
+
+    def emb2rgb(self, x_emb):
+        # x_emb = x_emb.squeeze(0)
+        x_emb = np.array(x_emb.detach().cpu())
+        shape = x_emb.shape
+        pca = PCA(n_components=3)
+        x_emb = np.transpose(x_emb, [0, 2, 3, 4, 1])
+        x_emb = x_emb.reshape(-1, 32)
+        new_emb = pca.fit_transform(x_emb)
+        new_emb = new_emb.reshape(shape[0], 3, shape[2], shape[3], shape[4])
+        new_emb = torch.tensor(new_emb)
+        return new_emb
 
     def vol_reshape(self, vol, sz):
         vol = vol.detach().cpu().unsqueeze(1)
