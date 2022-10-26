@@ -1,8 +1,10 @@
 from __future__ import print_function, division
 from typing import Optional, List
 import numpy as np
+import pandas as pd
 import time
 import random
+from cloudvolume import CloudVolume
 
 import torch.utils.data
 from ..augmentation import Compose
@@ -15,11 +17,11 @@ DEBUG = 0
 seg2target_factor = 1
 
 
-class VolumeDataset(torch.utils.data.Dataset):
+class ConnectorDataset(torch.utils.data.Dataset):
     """
-    Dataset class for volumetric image datasets. At training time, subvolumes are randomly sampled from all the large 
-    input volumes with (optional) rejection sampling to increase the frequency of foreground regions in a batch. At inference 
-    time, subvolumes are yielded in a sliding-window manner with overlap to counter border artifacts. 
+    Dataset class for connector sampling. Providing the path to the csv files of blocked connectors, the dataset first
+    sample a block and load the image volume and segmentation volume into the memory. The during the iterations it
+    samples the connectors in the csv file and get the corresponding image sub-volume and segmentation result.
 
     Args:
         volume (list): list of image volumes.
@@ -40,54 +42,34 @@ class VolumeDataset(torch.utils.data.Dataset):
         reject_diversity (int, optional): threshold to decide if a sampled volumes contains multiple objects. Default: 0
         reject_p (float, optional): probability of rejecting non-foreground volumes. Default: 0.95
 
-    Note: 
-        For relatively small volumes, the total number of possible subvolumes can be smaller than the total number 
-        of samples required in training (the product of total iterations and mini-natch size), which raises *StopIteration*. 
-        Therefore the dataset length is also decided by the training settings.
     """
 
     background: int = 0  # background label index
 
-    def __init__(self,
-                 volume: list,
-                 label: Optional[list] = None,
-                 valid_mask: Optional[list] = None,
-                 valid_ratio: float = 0.5,
-                 sample_volume_size: tuple = (8, 64, 64),
-                 sample_label_size: tuple = (8, 64, 64),
-                 cropped_label_size: tuple = (8, 64, 64),
-                 model_input_size: tuple = (8, 64, 64),
-                 sample_stride: tuple = (1, 1, 1),
-                 augmentor: AUGMENTOR_TYPE = None, 
-                 target_opt: TARGET_OPT_TYPE = ['1'], 
+    def __init__(self, connector_path, volume, model_input_size, sample_volume_size, iter_num: int = -1, vol_ffn1=None,
+                 mode='train',
+                 data_mean=0.5, data_std=0.5,
+                 augmentor: AUGMENTOR_TYPE = None,
+                 target_opt: TARGET_OPT_TYPE = ['1'],
                  weight_opt: WEIGHT_OPT_TYPE = [['1']],
                  erosion_rates: Optional[List[int]] = None,
                  dilation_rates: Optional[List[int]] = None,
-                 mode: str = 'train',
-                 do_2d: bool = False,
-                 iter_num: int = -1,
-                 # rejection sampling
-                 reject_size_thres: int = 0,
-                 reject_diversity: int = 0,
-                 reject_p: float = 0.95,
-                 # normalization
-                 data_mean=0.5,
-                 data_std=0.5,
-                 ssl: bool = False,
                  **kwargs):
 
         assert mode in ['train', 'val', 'test']
+        self.vol_ffn1 = vol_ffn1
         self.mode = mode
-        self.ssl = ssl
-        self.do_2d = do_2d
-        if self.do_2d:
-            assert (sample_volume_size[0] == 1) * (sample_label_size[0] == 1)
-
         # data format
+        self.sample_volume_size = sample_volume_size
+        self.model_input_size = model_input_size
+        self.connector_path = connector_path
         self.volume = volume
-        self.label = label
+        self.connector_list = pd.read_csv(self.connector_path, header=None)
+        self.connector_num = len(self.connector_list)
+        self.sample_num_a = len(self.connector_list)
+        self.label = None
+        self.valid_mask = None
         self.augmentor = augmentor
-
         # target and weight options
         self.target_opt = target_opt
         self.weight_opt = weight_opt
@@ -97,63 +79,18 @@ class VolumeDataset(torch.utils.data.Dataset):
             self.weight_opt = self.weight_opt[:-1]
         self.erosion_rates = erosion_rates
         self.dilation_rates = dilation_rates
-
-        # rejection samping
-        self.reject_size_thres = reject_size_thres
-        self.reject_diversity = reject_diversity
-        self.reject_p = reject_p
-
         # normalization
         self.data_mean = data_mean
         self.data_std = data_std
 
         # dataset: channels, depths, rows, cols
         # volume size, could be multi-volume input
-        self.volume_size = [np.array(x.shape) for x in self.volume]
-        self.cropped_label_size = cropped_label_size
         self.model_input_size = model_input_size
-        self.sample_volume_size = np.array(
-            sample_volume_size).astype(int)  # model input size
-        if self.label is not None:
-            self.sample_label_size = np.array(
-                sample_label_size).astype(int)  # model label size
-            self.label_vol_ratio = self.sample_label_size / self.sample_volume_size
-            if self.augmentor is not None:
-                assert np.array_equal(
-                    self.augmentor.sample_size, self.sample_label_size)
-            assert (self.cropped_label_size <= self.sample_label_size).all()
-        self._assert_valid_shape()
-        # crop seg before seg2target to reduce computation of LSD, must be even, otherwise the center will drift
-        # self.seg2target_size = [int((x//seg2target_factor)//2*2) for x in self.model_input_size]
-        # self.seg2target_size[0] = self.model_input_size[0]
-        # the perception radius of LSD is 60
-        self.seg2target_size = [x+120 for x in self.cropped_label_size] if self.model_input_size != self.cropped_label_size else self.cropped_label_size
-        self.seg2target_size[0] = self.model_input_size[0]
-        # crop the target to model output size
-        self.crop_pos_seg = (np.asarray([x // 2 for x in self.model_input_size]) - np.asarray(
-            [x // 2 for x in self.seg2target_size])).squeeze().astype(int)
-        self.crop_pos_target = (np.asarray([x // 2 for x in self.seg2target_size]) - np.asarray(
-            [x // 2 for x in self.cropped_label_size])).squeeze().astype(int)
-        if self.model_input_size == self.cropped_label_size:
-            self.crop_pos_seg = [0, 0, 0]
-            self.crop_pos_target = [0, 0, 0]
-        # compute number of samples for each dataset (multi-volume input)
-        self.sample_stride = np.array(sample_stride).astype(int)
-        self.sample_size = [count_volume(self.volume_size[x], self.sample_volume_size, self.sample_stride)
-                            for x in range(len(self.volume_size))]
 
-        # total number of possible inputs for each volume
-        self.sample_num = np.array([np.prod(x) for x in self.sample_size])
-        self.sample_num_a = np.sum(self.sample_num)
-        self.sample_num_c = np.cumsum([0] + list(self.sample_num))
-
-        # handle partially labeled volume
-        self.valid_mask = valid_mask
-        self.valid_ratio = valid_ratio
-
-        if self.mode in ['val', 'test']:  # for validation and test
-            self.sample_size_test = [
-                np.array([np.prod(x[1:3]), x[2]]) for x in self.sample_size]
+        # random sample factors
+        self.alpha_neg = 10
+        self.alpha_offset = 10
+        self.neg_point_num = 100
 
         # For relatively small volumes, the total number of samples can be generated is smaller
         # than the number of samples required for training (i.e., iteration * batch size). Thus
@@ -170,235 +107,117 @@ class VolumeDataset(torch.utils.data.Dataset):
         # orig input: keep uint/int format to save cpu memory
         # output sample: need np.float32
 
-        vol_size = self.sample_volume_size
+        vol_size = self.model_input_size
         if self.mode == 'train':
             # self.start_time = time.perf_counter()
             if DEBUG:
                 self.start_time = time.perf_counter()
-            sample = self._rejection_sampling(vol_size)
-            if DEBUG:
-                print('sampling and augmentation time: ', time.perf_counter()-self.start_time)
-            return self._process_targets(sample)
+            # random sample during training
+            # connector = self.connector_list.iloc[random.randint(0, self.connector_num)]
+            connector = self.connector_list.iloc[386]
+            return self._connector_to_target_sample(connector)
 
         elif self.mode == 'val':
-            pos = self._get_pos_test(index)
-            sample = self._crop_with_pos(pos, vol_size)
-            return self._process_targets(sample)
+            connector = self.connector_list.iloc[index]
+            return self._connector_to_target_sample(connector)
 
         elif self.mode == 'test':
-            pos = self._get_pos_test(index)
-            out_volume = (crop_volume(
-                self.volume[pos[0]], vol_size, pos[1:])/255.0).astype(np.float32)
-            out_volume = normalize_image(
-                out_volume, self.data_mean, self.data_std)
-            if self.do_2d:
-                out_volume = np.squeeze(out_volume)
-            return pos, np.expand_dims(out_volume, 0)
-
-    def _process_targets(self, sample):
-        if self.ssl:
-            pos, out_volume, out_label, out_valid, out_volume_2 = sample
-        else:
-            pos, out_volume, out_label, out_valid = sample
-
-        if self.do_2d:
-            out_volume = np.squeeze(out_volume)
-            out_label = np.squeeze(out_label)
-            if out_valid is not None:
-                out_valid = np.squeeze(out_valid)
-
-        out_volume = np.expand_dims(out_volume, 0)
-        out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
-        if self.ssl:  #
-            out_volume_2 = np.expand_dims(out_volume_2, 0)
-            out_volume_2 = normalize_image(out_volume_2, self.data_mean, self.data_std)
-            out_volume = np.stack((out_volume, out_volume_2), 0)
-            out_volume = out_volume.transpose(1, 0, 2, 3, 4)
-
-
-        # for model without padding
-        # assert (self.cropped_label_size <= self.sample_label_size).all()
-        # out_label = crop_center(out_label, self.cropped_label_size)
-        # output list
-        if DEBUG:
-            self.start_time = time.perf_counter()
-        out_label = out_label[self.crop_pos_seg[0]:self.crop_pos_target[0]+self.seg2target_size[0],
-                      self.crop_pos_seg[1]:self.crop_pos_seg[1]+self.seg2target_size[1],
-                      self.crop_pos_seg[2]:self.crop_pos_seg[2]+self.seg2target_size[2]]
-        out_target = seg_to_targets(
-            out_label, self.target_opt, self.erosion_rates, self.dilation_rates)
-        if DEBUG:
-            print('seg to target time: ', time.perf_counter()- self.start_time)
-        out_target = [x[:, self.crop_pos_target[0]:self.crop_pos_target[0]+self.cropped_label_size[0],
-                      self.crop_pos_target[1]:self.crop_pos_target[1]+self.cropped_label_size[1],
-                      self.crop_pos_target[2]:self.crop_pos_target[2]+self.cropped_label_size[2]] for x in out_target]
-        if out_valid is not None:
-            out_valid = [x[:, self.crop_pos[0]:self.crop_pos[0] + self.cropped_label_size[0],
-                          self.crop_pos[1]:self.crop_pos[1] + self.cropped_label_size[1],
-                          self.crop_pos[2]:self.crop_pos[2] + self.cropped_label_size[2]] for x in out_valid]
-        out_weight = seg_to_weights(
-            out_target, self.weight_opt, out_valid, out_label)
-        return pos, out_volume, out_target, out_weight
-
-    #######################################################
-    # Position Calculator
-    #######################################################
-
-    def _index_to_dataset(self, index):
-        return np.argmax(index < self.sample_num_c) - 1  # which dataset
-
-    def _index_to_location(self, index, sz):
-        # index -> z,y,x
-        # sz: [y*x, x]
-        pos = [0, 0, 0]
-        pos[0] = np.floor(index/sz[0])
-        pz_r = index % sz[0]
-        pos[1] = int(np.floor(pz_r/sz[1]))
-        pos[2] = pz_r % sz[1]
-        return pos
-
-    def _get_pos_test(self, index):
-        pos = [0, 0, 0, 0]
-        did = self._index_to_dataset(index)
-        pos[0] = did
-        index2 = index - self.sample_num_c[did]
-        pos[1:] = self._index_to_location(index2, self.sample_size_test[did])
-        # if out-of-bound, tuck in
-        for i in range(1, 4):
-            if pos[i] != self.sample_size[pos[0]][i-1]-1:
-                pos[i] = int(pos[i] * self.sample_stride[i-1])
-            else:
-                pos[i] = int(self.volume_size[pos[0]][i-1] -
-                             self.sample_volume_size[i-1])
-        return pos
-
-    def _get_pos_train(self, vol_size):
-        # random: multithread
-        # np.random: same seed
-        pos = [0, 0, 0, 0]
-        # pick a dataset
-        did = self._index_to_dataset(random.randint(0, self.sample_num_a-1))
-        pos[0] = did
-        # pick a position
-        tmp_size = count_volume(
-            self.volume_size[did], vol_size, self.sample_stride)
-        # random.seed(1)
-        tmp_pos = [random.randint(0, tmp_size[x]-1) * self.sample_stride[x]
-                   for x in range(len(tmp_size))]
-        # tmp_pos = [8,582,64]
-        pos[1:] = tmp_pos
-        return pos
-
-    #######################################################
-    # Volume Sampler
-    #######################################################
-    def _rejection_sampling(self, vol_size):
-        """Rejection sampling to filter out samples without required number 
-        of foreground pixels or valid ratio.
-        """
-        while True:
-            sample = self._random_sampling(vol_size)
-            pos, out_volume, out_label, out_valid = sample
-            if self.augmentor is not None:
-
-                if out_valid is not None:
-                    assert 'valid_mask' in self.augmentor.additional_targets.keys(), \
-                        "Need to specify the 'valid_mask' option in additional_targets " \
-                        "of the data augmentor when training with partial annotation."
-
-                data = {'image': out_volume,
-                        'label': out_label,
-                        'valid_mask': out_valid}
-                data_copy = data.copy()
-                if DEBUG:
-                    self.start_time = time.perf_counter()
-                augmented = self.augmentor(data)
-                if DEBUG:
-                    print('augmentation time: ', time.perf_counter() - self.start_time)
-                out_volume, out_label = augmented['image'], augmented['label']
-                out_valid = augmented['valid_mask']
-                # output two augmented volume for ssl
-                if self.ssl:
-                    augmented_2 = self.augmentor(data_copy)
-                    out_volume_2 = augmented_2['image']
-                    if self._is_valid(out_valid) and self._is_fg(out_label):
-                        return pos, out_volume, out_label, out_valid, out_volume_2
-            if self._is_valid(out_valid) and self._is_fg(out_label):
-                return pos, out_volume, out_label, out_valid
-
-    def _random_sampling(self, vol_size):
-        """Randomly sample a subvolume from all the volumes. 
-        """
-        pos = self._get_pos_train(vol_size)
-        return self._crop_with_pos(pos, vol_size)
+            connector = self.connector_list.iloc[index]
+            return self._connector_to_volume_sample(connector)
 
     def _crop_with_pos(self, pos, vol_size):
         out_volume = (crop_volume(
-            self.volume[pos[0]], vol_size, pos[1:])/255.0).astype(np.float32)
-        # position in the label and valid mask
-        out_label = None
-        if self.label is not None:
-            pos_l = np.round(pos[1:]*self.label_vol_ratio)
-            out_label = crop_volume(
-                self.label[pos[0]], self.sample_label_size, pos_l)
-            # For warping: cv2.remap requires input to be float32.
-            # Make labels index smaller. Otherwise uint32 and float32 are not
-            # the same for some values.
-            out_label = relabel(out_label.copy()).astype(np.float32)
+            self.volume[pos[0]], vol_size, pos[1:]) / 255.0).astype(np.float32)
+        return pos, out_volume
 
+    def _connector_to_target_sample(self, connector):
+        np.random.seed(random.randint(0,10))
+        cord = [connector[2][1:-1].split(' ')[0], connector[2][1:-1].split(' ')[8], connector[2][1:-1].split(' ')[17]]
+        cord = self.fafb_to_block(float(cord[0]), float(cord[1]), float(cord[2]))
+        # sample the nearby segments as negative samples, while masking the others as background
         out_valid = None
-        if self.valid_mask is not None:
-            out_valid = crop_volume(self.label[pos[0]],
-                                    self.sample_label_size, pos_l)
-            out_valid = (out_valid != 0).astype(np.float32)
+        seg_start = connector[0]
+        seg_positive = connector[1]
+        neg_cord_offset = np.asarray([np.random.normal(0, self.model_input_size[0] / self.alpha_neg, self.neg_point_num),
+                               np.random.normal(0, self.model_input_size[1] / self.alpha_neg, self.neg_point_num),
+                               np.random.normal(0, self.model_input_size[2] / self.alpha_neg, self.neg_point_num)])
+        # use random offset to prevent the model from using the position information
+        sample_offset = np.asarray([np.random.normal(0, self.model_input_size[0] / self.alpha_offset, 1),
+                               np.random.normal(0, self.model_input_size[1] / self.alpha_offset, 1),
+                               np.random.normal(0, self.model_input_size[2] / self.alpha_offset, 1)])
+        while not self.is_valid_offset(sample_offset, cord):
+            sample_offset = np.asarray([np.random.normal(0, self.model_input_size[0] / self.alpha_offset, 1),
+                                        np.random.normal(0, self.model_input_size[1] / self.alpha_offset, 1),
+                                        np.random.normal(0, self.model_input_size[2] / self.alpha_offset, 1)])
+        # the negative position should be around the connection point
+        neg_cord_offset = neg_cord_offset - sample_offset
+        neg_cord_offset = np.asarray([np.clip(neg_cord_offset[0], - self.model_input_size[0] / 2, self.model_input_size[0] / 2), np.clip(neg_cord_offset[1], - self.model_input_size[1] / 2, self.model_input_size[1] / 2), np.clip(neg_cord_offset[2], - self.model_input_size[2] / 2, self.model_input_size[2] / 2)])
+        neg_cord_pos = neg_cord_offset + np.transpose(np.asarray([self.sample_volume_size / 2]))
+        pos, out_volume = self._crop_with_pos([0, cord[2] - self.sample_volume_size[0] / 2 + sample_offset[0][0],
+                                               cord[0] - self.sample_volume_size[1] / 2 + sample_offset[1][0],
+                                               cord[1] - self.sample_volume_size[2] / 2 + sample_offset[2][0]], self.sample_volume_size)
+        out_label = crop_volume(self.vol_ffn1, self.sample_volume_size, pos[1:])
+        neg_cord_pos = list(neg_cord_pos.astype(np.int32))
+        seg_negative = np.asarray(np.unique(out_label[neg_cord_pos[0], neg_cord_pos[1], neg_cord_pos[2]]))
+        seg_negative = np.setdiff1d(seg_negative, [0, seg_positive])
 
-        return pos, out_volume, out_label, out_valid
+        data = {'image': out_volume,
+                'label': out_label,
+                'valid_mask': out_valid}
+        augmented = self.augmentor(data)
+        out_volume, out_label = augmented['image'], augmented['label']
+        out_valid = augmented['valid_mask']
+        out_target = seg_to_targets(
+            out_label, self.target_opt, self.erosion_rates, self.dilation_rates)
+        if DEBUG:
+            print('sampling and augmentation time: ', time.perf_counter() - self.start_time)
+        out_weight = seg_to_weights(out_target, self.weight_opt, out_valid, out_label)
+        out_volume = np.expand_dims(out_volume, 0)
+        out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
 
-    def _is_valid(self, out_valid: np.ndarray) -> bool:
-        """Decide whether the sampled region is valid or not using
-        the corresponding valid mask.
-        """
-        if self.valid_mask is None:
-            return True
-        ratio = float(out_valid.sum()) / np.prod(np.array(out_valid.shape))
-        return ratio > self.valid_ratio
+        pos_data = {'pos': pos,
+                    'seg_start': seg_start,
+                    'seg_positive': seg_positive,
+                    'seg_negative': seg_negative}
 
-    def _is_fg(self, out_label: np.ndarray) -> bool:
-        """Decide whether the sample belongs to a foreground decided
-        by the rejection sampling criterion.
-        """
-        p = self.reject_p
-        size_thres = self.reject_size_thres
-        if size_thres > 0:
-            temp = out_label.copy().astype(int)
-            temp = (temp != self.background).astype(int).sum()
-            if temp < size_thres and random.random() < p:
-                return False
+        return pos_data, out_volume, out_target, out_weight
 
-        num_thres = self.reject_diversity
-        if num_thres > 0:
-            temp = out_label.copy().astype(int)
-            num_objects = len(np.unique(temp))
-            if num_objects < num_thres and random.random() < p:
-                return False
+    def _connector_to_volume_sample(self, connector):
+        cord = [connector[2][1:-1].split(' ')[0], connector[2][1:-1].split(' ')[8], connector[2][1:-1].split(' ')[17]]
+        cord = self.fafb_to_block(float(cord[0]), float(cord[1]), float(cord[2]))
+        # sample image volume only
+        pos, out_volume = self._crop_with_pos([0, cord[2] - self.sample_volume_size[0] / 2,
+                                               cord[0] - self.sample_volume_size[1] / 2,
+                                               cord[1] - self.sample_volume_size[2] / 2], self.sample_volume_size)
+        out_volume = np.expand_dims(out_volume, 0)
+        out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
 
-        return True
+        return pos, out_volume
 
-    #######################################################
-    # Utils
-    #######################################################
-    def _assert_valid_shape(self):
-        assert all(
-            [(self.sample_volume_size <= x).all()
-             for x in self.volume_size]
-        ), "Input size should be smaller than volume size."
+    def fafb_to_block(self, x, y, z):
+        '''
+        (x,y,z):fafb坐标
+        (x_block,y_block,z_block):block块号
+        (x_pixel,y_pixel,z_pixel):块内像素号,其中z为帧序号,为了使得z属于中间部分,强制z属于[29,54)
+        文件名：z/y/z-xxx-y-xx-x-xx
+        '''
+        x_block_float = (x + 17631) / 1736 / 4
+        y_block_float = (y + 19211) / 1736 / 4
+        z_block_float = (z - 15) / 26
+        x_block = math.floor(x_block_float)
+        y_block = math.floor(y_block_float)
+        z_block = math.floor(z_block_float)
+        x_pixel = (x_block_float - x_block) * 1736
+        y_pixel = (y_block_float - y_block) * 1736
+        z_pixel = (z - 15) - z_block * 26
+        while z_pixel < 28:
+            z_block = z_block - 1
+            z_pixel = z_pixel + 26
+        return [int(x_pixel) + 156, int(y_pixel) + 156, int(z_pixel) - 12]
 
-        if self.label is not None:
-            assert all(
-                [(self.sample_label_size <= x).all()
-                 for x in self.volume_size]
-            ), "Label size should be smaller than volume size."
-
-def crop_center(img,target_size):
-    start = np.asarray([x//2 for x in img.shape]) - np.asarray([x//2 for x in target_size])
-    return img[start[0]:start[0]+target_size[0], start[1]:start[1]+target_size[1], start[2]:start[2]+target_size[2]]
+    def is_valid_offset(self, offset, cord):
+        lb = offset + np.transpose([np.asarray([cord[2], cord[1], cord[0]])]) - np.transpose([self.sample_volume_size / 2])
+        valid_lb = np.asarray([[0], [0], [0]])
+        ub = offset + np.transpose([np.asarray([cord[2], cord[1], cord[0]])]) + np.transpose([self.sample_volume_size / 2])
+        valid_ub = np.transpose([self.volume[0].shape])
+        return np.all(lb.astype(np.int32) > valid_lb) and np.all(ub.astype(np.int32) < valid_ub)

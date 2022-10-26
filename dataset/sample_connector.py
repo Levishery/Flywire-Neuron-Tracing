@@ -41,8 +41,8 @@ target_tree_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/tree_data'
 target_connector_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/connector_data'
 visualization_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/visualization'
 connector_files = os.listdir(target_connector_path)
-block_connector = '/braindat/lab/liusl/flywire/block_data/2_percent'
-thresh = 60
+block_connector = '/braindat/lab/liusl/flywire/block_data/30_percent'
+thresh = 10
 
 for connector_f in tqdm(connector_files):
     # block_list = define_block_list()
@@ -68,7 +68,7 @@ for connector_f in tqdm(connector_files):
                 file_name = 'connector_' + str(x_b) + '_' + str(y_b) + '_' + str(z_b) + '.csv'
                 row = pd.DataFrame([{'node0_segid': int(df['node0_segid'][i]), 'node1_segid': int(df['node1_segid'][i]),
                                     'cord': cord, 'score': score, 'neuron_id': neuron_id}])
-                row.to_csv(os.path.join(block_connector, file_name), mode='a', header=True, index=False)
+                row.to_csv(os.path.join(block_connector, file_name), mode='a', header=False, index=False)
     else:
         print('invalid neuron', neuron_id)
             # block_list[z_b][y_b][x_b].append([int(df['node0_segid'][i]), int(df['node1_segid'][i]),

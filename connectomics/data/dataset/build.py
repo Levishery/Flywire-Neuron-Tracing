@@ -13,6 +13,7 @@ import torch.utils.data
 
 from .dataset_volume import VolumeDataset
 from .dataset_multivolume import MultiVolumeDataset
+from .dataset_connector import ConnectorDataset
 from .dataset_tile import TileDataset
 from .collate import *
 from ..utils import *
@@ -233,9 +234,10 @@ def get_dataset(cfg,
         "data_std": cfg.DATASET.STD,
         "erosion_rates": cfg.MODEL.LABEL_EROSION,
         "dilation_rates": cfg.MODEL.LABEL_DILATION,
+        "connector_dataset": cfg.DATASET.CONNECTOR_DATSET,
         "ssl": False if cfg.MODEL.SSL == 'none' else True,
     }
-    if cfg.DATASET.DO_MULTI_VOLUME:
+    if cfg.DATASET.DO_MULTI_VOLUME:  # build MultiVolumeDataset
         dir_name = _get_file_list(cfg.DATASET.INPUT_PATH)
         img_name = None
         if cfg.DATASET.IMAGE_NAME is not None:
@@ -248,6 +250,22 @@ def get_dataset(cfg,
             label_name = _get_file_list(cfg.DATASET.LABEL_NAME)
             label_path = _make_path_list(cfg, dir_name, label_name, rank)
             assert len(label_name) == len(img_name)
+        dataset = MultiVolumeDataset(volume_path, label_path, pad_size=cfg.DATASET.PAD_SIZE,
+                                     chunk_iter=cfg.DATASET.DATA_CHUNK_ITER,
+                                     pad_mode=cfg.DATASET.PAD_MODE, **shared_kwargs)
+
+    elif cfg.DATASET.CONNECTOR_DATSET:  # build ConnectorDataset
+        if mode == 'val':
+            dir_name = _get_file_list(cfg.DATASET.VAL_PATH)
+        else:
+            dir_name = _get_file_list(cfg.DATASET.INPUT_PATH)
+        img_name = None
+        if cfg.DATASET.IMAGE_NAME is not None:
+            img_name = _get_file_list(cfg.DATASET.IMAGE_NAME)
+
+        volume_path = _make_path_list(cfg, dir_name, img_name, rank)
+        label_path = volume_path
+        print('build ConnectorDataset for rank:', rank)
         dataset = MultiVolumeDataset(volume_path, label_path, pad_size=cfg.DATASET.PAD_SIZE,
                                      chunk_iter=cfg.DATASET.DATA_CHUNK_ITER,
                                      pad_mode=cfg.DATASET.PAD_MODE, **shared_kwargs)

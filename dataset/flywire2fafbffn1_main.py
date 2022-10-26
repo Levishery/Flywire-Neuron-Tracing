@@ -313,6 +313,7 @@ def get_connector(skel):
 
 
 if __name__ == "__main__":
+    # 可以改进的：1. soma 2. filter thresh
     create_logger(name='l1', file='/braindat/lab/liusl/flywire/log/flywire2fafbffn_debug3.log', sub_print=True, file_level='DEBUG')
     target_tree_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/tree_data'
     target_connector_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/connector_data'
