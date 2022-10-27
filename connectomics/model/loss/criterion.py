@@ -35,6 +35,7 @@ class Criterion(object):
         'WeightedCE': WeightedCE,
         'WeightedBCEWithLogitsLoss': WeightedBCEWithLogitsLoss,
         'DiscriminativeLoss': DiscriminativeLoss,
+        'ConnectionLoss': ConnectionLoss,
         'WeightedBCEFocalLoss': WeightedBCEFocalLoss,
         'WSDiceLoss': WSDiceLoss
     }

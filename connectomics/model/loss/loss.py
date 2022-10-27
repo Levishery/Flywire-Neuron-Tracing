@@ -233,6 +233,8 @@ class DiscriminativeLoss(nn.Module):
         self.gama = gama
 
     def discriminative_loss(self, embedding, seg_gt):
+        if seg_gt.ndim == 6:
+            seg_gt = seg_gt[:, 0, :, :, :, :]
         batch_size = embedding.shape[0]
         embed_dim = embedding.shape[1]
         var_loss = torch.tensor(0, dtype=embedding.dtype, device=embedding.device)
@@ -293,4 +295,92 @@ class DiscriminativeLoss(nn.Module):
 
     def forward(self, pred, target, weight_mask=None):
         loss = self.discriminative_loss(pred, target)
+        return loss
+
+
+class ConnectionLoss(nn.Module):
+    def __init__(self, delta_v=0.5, delta_d=3, alpha=1, beta=1, gama=0.001):
+        super().__init__()
+        self.delta_v = delta_v
+        self.delta_d = delta_d
+        self.alpha = alpha
+        self.beta = beta
+        self.gama = gama
+
+    def connection_loss(self, embedding, seg_gt):
+        batch_size = embedding.shape[0]
+        embed_dim = embedding.shape[1]
+        positive_map = seg_gt[:, 1, :, :, :, :]
+        negative_map = seg_gt[:, 2, :, :, :, :]
+        connect_loss = torch.tensor(0, dtype=embedding.dtype, device=embedding.device)
+        apart_loss = torch.tensor(0, dtype=embedding.dtype, device=embedding.device)
+
+        # positive loss: pull s_start and s_pos closer
+        for b in range(batch_size):
+            embedding_b = embedding[b]  # (embed_dim, D, H, W)
+            positive_map_b = positive_map[b].squeeze()
+
+            labels = torch.unique(positive_map_b)
+            labels = labels[labels != 0]
+            num_id_pos = len(labels)
+
+            centroid_mean_pos = []
+            for idx in labels:
+                seg_mask_i = (positive_map_b == idx)
+                if not seg_mask_i.any():
+                    continue
+                embedding_i = embedding_b[:, seg_mask_i]  # get positive positions
+                # print(embedding_i.shape)
+                mean_i = torch.mean(embedding_i, dim=1)  # ????
+                # print(mean_i.shape)
+                centroid_mean_pos.append(mean_i)
+
+            centroid_mean_pos = torch.stack(centroid_mean_pos)  # (n_lane, embed_dim)
+
+            if num_id_pos > 1:
+                centroid_mean1 = centroid_mean_pos.reshape(-1, 1, embed_dim)
+                centroid_mean2 = centroid_mean_pos.reshape(1, -1, embed_dim)
+                dist_pos = torch.norm(centroid_mean1 - centroid_mean2, dim=2)  # shape (num_id, num_id)
+                dist_pos = dist_pos + torch.eye(num_id_pos, dtype=dist_pos.dtype,
+                                        device=dist_pos.device) * self.delta_d  # diagonal elements are 0, now mask above delta_d
+
+                # divided by two for double calculated loss above, for implementation convenience
+                connect_loss = connect_loss + torch.sum(dist_pos ** 2) / (num_id_pos * (num_id_pos - 1)) / 2
+
+        # negative loss: push s_start and s_neg apart
+        for b in range(batch_size):
+            embedding_b = embedding[b]  # (embed_dim, D, H, W)
+            negative_map_b = negative_map[b].squeeze()
+
+            labels = torch.unique(negative_map_b)
+            labels = labels[labels != 0]
+            num_id_neg = len(labels)
+
+            centroid_mean_neg = []
+            for idx in labels:
+                seg_mask_i = (negative_map_b == idx)
+                if not seg_mask_i.any():
+                    continue
+                embedding_i = embedding_b[:, seg_mask_i]  # get positive positions
+                # print(embedding_i.shape)
+                mean_i = torch.mean(embedding_i, dim=1)  # ????
+                # print(mean_i.shape)
+                centroid_mean_neg.append(mean_i)
+            centroid_mean_neg = torch.stack(centroid_mean_neg)  # (n_lane, embed_dim)
+
+            if num_id_neg > 1:
+                centroid_mean1 = centroid_mean_pos.reshape(-1, 1, embed_dim)
+                centroid_mean2 = centroid_mean_neg.reshape(1, -1, embed_dim)
+                dist_neg = torch.norm(centroid_mean1 - centroid_mean2, dim=2)  # shape (num_id, num_id)
+
+                # divided by two for double calculated loss above, for implementation convenience
+                apart_loss = apart_loss + torch.sum(F.relu(-dist_neg + self.delta_d) ** 2) / (num_id_pos * num_id_neg)
+        connect_loss = connect_loss / batch_size
+        apart_loss = apart_loss / batch_size
+
+        Loss = self.alpha * connect_loss + self.beta * apart_loss
+        return Loss
+
+    def forward(self, pred, target, weight_mask=None):
+        loss = self.connection_loss(pred, target)
         return loss

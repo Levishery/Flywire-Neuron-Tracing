@@ -56,7 +56,10 @@ class Visualizer(object):
                 label[idx] = temp_label / temp_label.max() + 1e-6
             if topt[0] == 'e':
                 output[idx] = self.emb2rgb(output[idx])
-                label[idx] = label[idx] / label[idx].max() + 1e-6
+                if label[idx].dim() == 6:
+                    label[idx] = label[idx][:, 1, :, :, :, :] / label[idx][:, 1, :, :, :, :].max() + 1e-6
+                else:
+                    label[idx] = label[idx] / label[idx].max() + 1e-6
             RGB = (topt[0] in ['1', '2', '9', 'e'])
             vis_name = self.cfg.MODEL.TARGET_OPT[idx] + '_' + str(idx)
             if suffix is not None:

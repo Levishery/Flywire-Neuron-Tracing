@@ -134,21 +134,18 @@ class ConnectorDataset(torch.utils.data.Dataset):
         np.random.seed(random.randint(0,10))
         cord = [connector[2][1:-1].split(' ')[0], connector[2][1:-1].split(' ')[8], connector[2][1:-1].split(' ')[17]]
         cord = self.fafb_to_block(float(cord[0]), float(cord[1]), float(cord[2]))
+
         # sample the nearby segments as negative samples, while masking the others as background
         out_valid = None
         seg_start = connector[0]
         seg_positive = connector[1]
-        neg_cord_offset = np.asarray([np.random.normal(0, self.model_input_size[0] / self.alpha_neg, self.neg_point_num),
-                               np.random.normal(0, self.model_input_size[1] / self.alpha_neg, self.neg_point_num),
-                               np.random.normal(0, self.model_input_size[2] / self.alpha_neg, self.neg_point_num)])
+        neg_cord_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_neg, self.model_input_size[1] / self.alpha_neg, self.neg_point_num)
+
         # use random offset to prevent the model from using the position information
-        sample_offset = np.asarray([np.random.normal(0, self.model_input_size[0] / self.alpha_offset, 1),
-                               np.random.normal(0, self.model_input_size[1] / self.alpha_offset, 1),
-                               np.random.normal(0, self.model_input_size[2] / self.alpha_offset, 1)])
+        sample_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_offset, self.model_input_size[1] / self.alpha_offset, 1)
         while not self.is_valid_offset(sample_offset, cord):
-            sample_offset = np.asarray([np.random.normal(0, self.model_input_size[0] / self.alpha_offset, 1),
-                                        np.random.normal(0, self.model_input_size[1] / self.alpha_offset, 1),
-                                        np.random.normal(0, self.model_input_size[2] / self.alpha_offset, 1)])
+            sample_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_offset, self.model_input_size[1] / self.alpha_offset, 1)
+
         # the negative position should be around the connection point
         neg_cord_offset = neg_cord_offset - sample_offset
         neg_cord_offset = np.asarray([np.clip(neg_cord_offset[0], - self.model_input_size[0] / 2, self.model_input_size[0] / 2), np.clip(neg_cord_offset[1], - self.model_input_size[1] / 2, self.model_input_size[1] / 2), np.clip(neg_cord_offset[2], - self.model_input_size[2] / 2, self.model_input_size[2] / 2)])
@@ -167,18 +164,17 @@ class ConnectorDataset(torch.utils.data.Dataset):
         augmented = self.augmentor(data)
         out_volume, out_label = augmented['image'], augmented['label']
         out_valid = augmented['valid_mask']
+        pos_data = {'pos': pos,
+                    'seg_start': seg_start,
+                    'seg_positive': seg_positive,
+                    'seg_negative': seg_negative}
         out_target = seg_to_targets(
-            out_label, self.target_opt, self.erosion_rates, self.dilation_rates)
+            out_label, self.target_opt, self.erosion_rates, self.dilation_rates, segment_info=pos_data)
         if DEBUG:
             print('sampling and augmentation time: ', time.perf_counter() - self.start_time)
         out_weight = seg_to_weights(out_target, self.weight_opt, out_valid, out_label)
         out_volume = np.expand_dims(out_volume, 0)
         out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
-
-        pos_data = {'pos': pos,
-                    'seg_start': seg_start,
-                    'seg_positive': seg_positive,
-                    'seg_negative': seg_negative}
 
         return pos_data, out_volume, out_target, out_weight
 
@@ -221,3 +217,8 @@ class ConnectorDataset(torch.utils.data.Dataset):
         ub = offset + np.transpose([np.asarray([cord[2], cord[1], cord[0]])]) + np.transpose([self.sample_volume_size / 2])
         valid_ub = np.transpose([self.volume[0].shape])
         return np.all(lb.astype(np.int32) > valid_lb) and np.all(ub.astype(np.int32) < valid_ub)
+
+    def sample_from_normal3d(self, sigma_z, sigma_xy, point_num):
+        return np.asarray([np.random.normal(0, sigma_z, point_num),
+                               np.random.normal(0, sigma_xy, point_num),
+                               np.random.normal(0, sigma_xy, point_num)])

@@ -239,6 +239,12 @@ def seg2LSD(label, topt):
         return get_local_shape_descriptors(label, sigma=(120, 120, 120), voxel_size=(6,6,30), downsample=2)
 
 
+def mask_irrelevant_id(label, ids):
+    mask = np.zeros(label.shape, dtype=bool)
+    for id in ids:
+        mask = np.logical_or(mask, np.array(label == id))
+    return mask*label
+
 def erode_label(label: np.ndarray,
                 index: int,
                 erosion_rates: RATES_TYPE = None):
@@ -271,7 +277,8 @@ def dilate_label(label: np.ndarray,
 def seg_to_targets(label_orig: np.ndarray,
                    topts: List[str],
                    erosion_rates: RATES_TYPE = None,
-                   dilation_rates: RATES_TYPE = None):
+                   dilation_rates: RATES_TYPE = None,
+                   segment_info = None):
     # input: (D, H, W), output: (C, D, H, W)
     out = [None]*len(topts)
 
@@ -326,7 +333,14 @@ def seg_to_targets(label_orig: np.ndarray,
         elif topt[0] == 'r':  # reconstruction
             out[tid] = normalize_image(label)[np.newaxis, :].astype(np.float32)
         elif topt[0] == 'e':  # reconstruction
-            out[tid] = np.expand_dims(label.astype(np.int64), axis=0)
+            if segment_info is not None:
+                tmp = [None] * 3
+                tmp[0] = np.expand_dims(label.astype(np.int64), axis=0)
+                tmp[1] = np.expand_dims(mask_irrelevant_id(label, [segment_info['seg_start'], segment_info['seg_positive']]).astype(np.int64), axis=0)
+                tmp[2] = np.expand_dims(mask_irrelevant_id(label, segment_info['seg_negative']), axis=0)
+                out[tid] = np.stack(tmp, 0)
+            else:
+                out[tid] = np.expand_dims(label.astype(np.int64), axis=0)
         else:
             raise NameError("Target option %s is not valid!" % topt[0])
 

@@ -5,16 +5,13 @@ MODEL:
   ARCHITECTURE: unet_3d
   BLOCK_TYPE: residual_se
   FILTERS: [32, 64, 96, 128, 160]
-  OUT_PLANES: 19
-  TARGET_OPT: ["2", "e"]
+  OUT_PLANES: 16
+  TARGET_OPT: ["e"]
   LOSS_OPTION:
-    [
-      [ "WeightedBCEWithLogitsLoss", "DiceLoss" ],
-      [ "DiscriminativeLoss" ],
-    ]
-  LOSS_WEIGHT: [ [ 1.0, 0.5 ], [ 1.0 ] ]
-  WEIGHT_OPT: [ [ "1", "0" ], [ "0" ] ]
-  OUTPUT_ACT: [[ "none", "sigmoid" ], [ "none" ]]
+    [[ "DiscriminativeLoss", "ConnectionLoss" ]]
+  LOSS_WEIGHT: [[ 1.0, 0.1 ]]
+  WEIGHT_OPT: [[ "0", "0" ]]
+  OUTPUT_ACT: [[ "none",  "none" ]]
 MONITOR:
   ITERATION_NUM: [20, 200]
 DATASET:
@@ -30,7 +27,7 @@ DATASET:
 INFERENCE:
   OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
   OUTPUT_NAME: result.h5
-  OUTPUT_ACT: [ "sigmoid", "sigmoid"]
+  OUTPUT_ACT: ["none"]
 AUGMENTOR:
   SMOOTH: False
   MISSINGPARTS:
