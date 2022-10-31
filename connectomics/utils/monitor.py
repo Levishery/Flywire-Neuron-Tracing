@@ -124,6 +124,10 @@ class Monitor(object):
             self.vis.visualize(volume, label, output[key], weight,
                                iter_total, self.logger.log_tb, suffix_key)
 
+    def plot_distance(self, distance_pos, distance_neg, iteration, name=None):
+        # for connection evaluation
+        self.vis.plot_distance(distance_pos, distance_neg, iteration, self.logger.log_tb, name=name)
+
     def load_info(self, cfg: CfgNode, model: nn.Module):
         self._load_config(cfg)
         self._load_model(model)

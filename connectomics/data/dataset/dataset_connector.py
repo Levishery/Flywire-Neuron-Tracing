@@ -60,7 +60,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
         self.vol_ffn1 = vol_ffn1
         self.mode = mode
         # data format
-        self.sample_volume_size = sample_volume_size
+        self.sample_volume_size = np.asarray(sample_volume_size)
         self.model_input_size = model_input_size
         self.connector_path = connector_path
         self.volume = volume
@@ -113,8 +113,10 @@ class ConnectorDataset(torch.utils.data.Dataset):
             if DEBUG:
                 self.start_time = time.perf_counter()
             # random sample during training
-            # connector = self.connector_list.iloc[random.randint(0, self.connector_num)]
-            connector = self.connector_list.iloc[386]
+            idx = random.randint(0, self.connector_num-1)
+            # print(idx)
+            connector = self.connector_list.iloc[idx]
+            # connector = self.connector_list.iloc[386]
             return self._connector_to_target_sample(connector)
 
         elif self.mode == 'val':
@@ -132,7 +134,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
 
     def _connector_to_target_sample(self, connector):
         np.random.seed(random.randint(0,10))
-        cord = [connector[2][1:-1].split(' ')[0], connector[2][1:-1].split(' ')[8], connector[2][1:-1].split(' ')[17]]
+        cord = connector[2][1:-1].split()
         cord = self.fafb_to_block(float(cord[0]), float(cord[1]), float(cord[2]))
 
         # sample the nearby segments as negative samples, while masking the others as background
@@ -148,7 +150,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
 
         # the negative position should be around the connection point
         neg_cord_offset = neg_cord_offset - sample_offset
-        neg_cord_offset = np.asarray([np.clip(neg_cord_offset[0], - self.model_input_size[0] / 2, self.model_input_size[0] / 2), np.clip(neg_cord_offset[1], - self.model_input_size[1] / 2, self.model_input_size[1] / 2), np.clip(neg_cord_offset[2], - self.model_input_size[2] / 2, self.model_input_size[2] / 2)])
+        neg_cord_offset = np.asarray([np.clip(neg_cord_offset[0], - self.model_input_size[0] / 2, self.model_input_size[0] / 2 - 1), np.clip(neg_cord_offset[1], - self.model_input_size[1] / 2, self.model_input_size[1] / 2 - 1), np.clip(neg_cord_offset[2], - self.model_input_size[2] / 2, self.model_input_size[2] / 2 - 1)])
         neg_cord_pos = neg_cord_offset + np.transpose(np.asarray([self.sample_volume_size / 2]))
         pos, out_volume = self._crop_with_pos([0, cord[2] - self.sample_volume_size[0] / 2 + sample_offset[0][0],
                                                cord[0] - self.sample_volume_size[1] / 2 + sample_offset[1][0],
@@ -219,6 +221,9 @@ class ConnectorDataset(torch.utils.data.Dataset):
         return np.all(lb.astype(np.int32) > valid_lb) and np.all(ub.astype(np.int32) < valid_ub)
 
     def sample_from_normal3d(self, sigma_z, sigma_xy, point_num):
+        # print(np.asarray([np.random.normal(0, sigma_z, point_num),
+        #                        np.random.normal(0, sigma_xy, point_num),
+        #                        np.random.normal(0, sigma_xy, point_num)]))
         return np.asarray([np.random.normal(0, sigma_z, point_num),
                                np.random.normal(0, sigma_xy, point_num),
                                np.random.normal(0, sigma_xy, point_num)])

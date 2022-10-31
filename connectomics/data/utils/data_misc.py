@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 from typing import Optional, Tuple, List, Union
 import numpy as np
+from connectomics.model.loss import ConnectionLoss
 
 
 def get_padsize(pad_size: Union[int, List[int]], ndim: int = 3) -> Tuple[int]:
@@ -95,3 +96,9 @@ def split_masks(label):
         return np.stack(masks, 0)
 
     return np.ones_like(label).astype(np.uint8)[np.newaxis]
+
+
+def get_connection_distance(pred, target):
+    func = ConnectionLoss()
+    dist_pos, dist_neg, classification = func(pred, target[0], get_distance=True)
+    return dist_pos, dist_neg, classification

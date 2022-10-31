@@ -243,6 +243,8 @@ def mask_irrelevant_id(label, ids):
     mask = np.zeros(label.shape, dtype=bool)
     for id in ids:
         mask = np.logical_or(mask, np.array(label == id))
+    if len(np.unique(mask*label)) < 3:
+        print('DEBUG')
     return mask*label
 
 def erode_label(label: np.ndarray,

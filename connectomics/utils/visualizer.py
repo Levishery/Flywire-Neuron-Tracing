@@ -1,4 +1,6 @@
 from __future__ import print_function, division
+
+import random
 from typing import Optional, List, Union, Tuple
 
 import torch
@@ -6,6 +8,9 @@ import torch.nn.functional as F
 import torchvision.utils as vutils
 import numpy as np
 from sklearn.decomposition import PCA
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib import pyplot as plt
+import PIL.Image as Image
 
 from ..data.utils import decode_quantize
 from connectomics.model.utils import SplitActivation
@@ -173,3 +178,22 @@ class Visualizer(object):
     def vol_reshape(self, vol, sz):
         vol = vol.detach().cpu().unsqueeze(1)
         return vol.expand(sz[0], 3, sz[2], sz[3])
+
+    def plot_distance(self, distance_pos, distance_neg, iteration, writer, name=None):
+        distance_neg = np.concatenate([np.asarray(sample.cpu()) for sample in distance_neg])
+        distance_pos = np.asarray([np.asarray(sample.cpu()) for sample in distance_pos])
+        random.shuffle(distance_neg)
+        plt.scatter(np.random.rand(len(distance_neg)), np.asarray(distance_neg), c='black', s=5)
+        plt.scatter(np.random.rand(len(distance_pos)), np.asarray(distance_pos), c='red', s=5)
+        # from plt to np
+        canvas = FigureCanvasAgg(plt.gcf())
+        canvas.draw()
+        w, h = canvas.get_width_height()
+        buf = np.fromstring(canvas.tostring_argb(), dtype=np.uint8)
+        buf.shape = (w, h, 4)
+        buf = np.roll(buf, 3, axis=2)
+        image = Image.frombytes("RGBA", (w, h), buf.tostring())
+        image = np.asarray(image)
+        plot_distance = image[:, :, :3]
+        plot_distance.transpose(2,1,0)
+        writer.add_image('%s distance scatter plot' % name, plot_distance, iteration, dataformats='HWC')

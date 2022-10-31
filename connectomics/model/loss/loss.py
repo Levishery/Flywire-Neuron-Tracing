@@ -307,7 +307,7 @@ class ConnectionLoss(nn.Module):
         self.beta = beta
         self.gama = gama
 
-    def connection_loss(self, embedding, seg_gt):
+    def connection_loss(self, embedding, seg_gt, get_distance=False):
         batch_size = embedding.shape[0]
         embed_dim = embedding.shape[1]
         positive_map = seg_gt[:, 1, :, :, :, :]
@@ -316,6 +316,8 @@ class ConnectionLoss(nn.Module):
         apart_loss = torch.tensor(0, dtype=embedding.dtype, device=embedding.device)
 
         # positive loss: pull s_start and s_pos closer
+        dist_pos_show = []
+        classification_show = []
         for b in range(batch_size):
             embedding_b = embedding[b]  # (embed_dim, D, H, W)
             positive_map_b = positive_map[b].squeeze()
@@ -323,6 +325,8 @@ class ConnectionLoss(nn.Module):
             labels = torch.unique(positive_map_b)
             labels = labels[labels != 0]
             num_id_pos = len(labels)
+            if num_id_pos != 2:
+                print('DEBUG')
 
             centroid_mean_pos = []
             for idx in labels:
@@ -340,14 +344,14 @@ class ConnectionLoss(nn.Module):
             if num_id_pos > 1:
                 centroid_mean1 = centroid_mean_pos.reshape(-1, 1, embed_dim)
                 centroid_mean2 = centroid_mean_pos.reshape(1, -1, embed_dim)
-                dist_pos = torch.norm(centroid_mean1 - centroid_mean2, dim=2)  # shape (num_id, num_id)
-                dist_pos = dist_pos + torch.eye(num_id_pos, dtype=dist_pos.dtype,
-                                        device=dist_pos.device) * self.delta_d  # diagonal elements are 0, now mask above delta_d
+                dist_pos = torch.norm(centroid_mean1 - centroid_mean2, dim=2)
+                dist_pos_show.append(dist_pos[0, 1].clone().detach().expand(1))
 
                 # divided by two for double calculated loss above, for implementation convenience
                 connect_loss = connect_loss + torch.sum(dist_pos ** 2) / (num_id_pos * (num_id_pos - 1)) / 2
 
         # negative loss: push s_start and s_neg apart
+        dist_neg_show = []
         for b in range(batch_size):
             embedding_b = embedding[b]  # (embed_dim, D, H, W)
             negative_map_b = negative_map[b].squeeze()
@@ -372,6 +376,11 @@ class ConnectionLoss(nn.Module):
                 centroid_mean1 = centroid_mean_pos.reshape(-1, 1, embed_dim)
                 centroid_mean2 = centroid_mean_neg.reshape(1, -1, embed_dim)
                 dist_neg = torch.norm(centroid_mean1 - centroid_mean2, dim=2)  # shape (num_id, num_id)
+                dist_neg_show.append(dist_neg[0, :].clone().detach())
+                if (dist_pos_show[b] < dist_neg_show[-1]).all():
+                    classification_show.append(True)
+                else:
+                    classification_show.append(False)
 
                 # divided by two for double calculated loss above, for implementation convenience
                 apart_loss = apart_loss + torch.sum(F.relu(-dist_neg + self.delta_d) ** 2) / (num_id_pos * num_id_neg)
@@ -379,8 +388,10 @@ class ConnectionLoss(nn.Module):
         apart_loss = apart_loss / batch_size
 
         Loss = self.alpha * connect_loss + self.beta * apart_loss
+        if get_distance:
+            return torch.cat(dist_pos_show), torch.cat(dist_neg_show), classification_show
         return Loss
 
-    def forward(self, pred, target, weight_mask=None):
-        loss = self.connection_loss(pred, target)
+    def forward(self, pred, target, weight_mask=None, get_distance=False):
+        loss = self.connection_loss(pred, target, get_distance)
         return loss

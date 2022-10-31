@@ -19,7 +19,7 @@ from ..utils.monitor import build_monitor
 from ..data.augmentation import build_train_augmentor, TestAugmentor
 from ..data.dataset import build_dataloader, get_dataset
 from ..data.dataset.build import _get_file_list
-from ..data.utils import build_blending_matrix, writeh5
+from ..data.utils import build_blending_matrix, writeh5, get_connection_distance
 from ..data.utils import get_padsize, array_unpad
 
 
@@ -83,7 +83,7 @@ class Trainer(object):
                 self.test_filename = self.augmentor.update_name(
                     self.test_filename)
 
-        self.dataset, self.dataloader = None, None
+        self.dataset, self.dataloader, self.dataset_val = None, None, None
         if not self.cfg.DATASET.DO_CHUNK_TITLE and not self.inference_singly and not self.cfg.DATASET.DO_MULTI_VOLUME:
             self.dataloader = build_dataloader(
                 self.cfg, self.augmentor, self.mode, rank=rank)
@@ -167,6 +167,9 @@ class Trainer(object):
         self.model.eval()
         with torch.no_grad():
             val_loss = 0.0
+            distance_pos_list = []
+            distance_neg_list = []
+            classification_list = []
             for i, sample in enumerate(self.val_loader):
                 volume = sample.out_input
                 target, weight = sample.out_target_l, sample.out_weight_l
@@ -176,12 +179,22 @@ class Trainer(object):
                 pred = self.model(volume)
                 loss, _ = self.criterion(pred, target, weight)
                 val_loss += loss.data
-
+                if self.cfg.DATASET.CONNECTOR_DATSET:
+                    distance_pos, distance_neg, classification = get_connection_distance(pred, target)
+                    distance_neg_list.append(distance_neg)
+                    distance_pos_list.append(distance_pos)
+                    classification_list = classification_list + classification
+        name = self.dataset_val.volume_sample.split('/')[-1]
+        accuracy = sum(classification_list)/len(classification_list)
         if hasattr(self, 'monitor'):
             self.monitor.logger.log_tb.add_scalar(
-                'Validation_Loss', val_loss, iter_total)
+                '%s_Validation_Loss' % name, val_loss, iter_total)
+            self.monitor.logger.log_tb.add_scalar(
+                '%s_Validation_classifaction' % name, accuracy, iter_total)
             self.monitor.visualize(volume, target, pred,
                                    weight, iter_total, suffix='Val')
+            if self.cfg.DATASET.CONNECTOR_DATSET:
+                self.monitor.plot_distance(distance_pos_list, distance_neg_list, iter_total, name=name)
 
         if not hasattr(self, 'best_val_loss'):
             self.best_val_loss = val_loss
@@ -477,9 +490,13 @@ class Trainer(object):
         """
         self.dataset = get_dataset(self.cfg, self.augmentor, mode, rank=rank)
         if mode == 'train':
+            if self.cfg.DATASET.VAL_PATH is not None:
+                self.dataset_val = get_dataset(self.cfg, self.augmentor, mode='val', rank=rank)
             num_chunk = self.total_iter_nums // self.cfg.DATASET.DATA_CHUNK_ITER
             self.total_iter_nums = self.cfg.DATASET.DATA_CHUNK_ITER
             for chunk in range(num_chunk):
+                # if self.start_iter % self.cfg.SOLVER.ITERATION_VAL == 0:  # ITERATION_VAL should be k*DATA_CHUNK_ITER
+                #     self.val_loader = build_dataloader(self.cfg, None, mode='val', dataset=self.dataset.dataset)
                 self.chunk_time = time.time()
                 self.dataset.updatechunk()
                 self.dataloader = build_dataloader(self.cfg, self.augmentor, mode,
@@ -494,6 +511,14 @@ class Trainer(object):
                 self.start_iter += self.cfg.DATASET.DATA_CHUNK_ITER
                 del self.dataloader
                 print('chunk time:', time.time()-self.chunk_time)
+                # ITERATION_VAL should be k*DATA_CHUNK_ITER
+                if self.dataset_val is not None and self.start_iter % self.cfg.SOLVER.ITERATION_VAL == 0:
+                    while len(self.dataset_val.volume_done) < len(self.dataset_val.volume_path):
+                        self.dataset_val.updatechunk()
+                        self.val_loader = build_dataloader(self.cfg, None, mode='val', dataset=self.dataset_val.dataset)
+                        self.val_loader = iter(self.val_loader)
+                        self.validate(self.start_iter)
+                        del self.val_loader
             else:
                 print('Multi-volume is for model pretraining.')
             return

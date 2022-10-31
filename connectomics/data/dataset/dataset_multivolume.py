@@ -62,21 +62,20 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
         self.connector_dataset = connector_dataset
         if self.connector_dataset:
             self.vol_ffn1 = CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0')
-            self.block_image_path = '/braindat/lab/liusl/flywire/block_data/FAFBv14'
+            self.block_image_path = '/braindat/lab/liusl/flywire/block_data/fafbv14'
 
     def updatechunk(self, do_load=True):
         r"""Update the coordinates to a new chunk in the large volume.
         """
-        if len(self.volume_done) == len(self.volume_path):
-            self.volume_done = []
-        volume_rest = list(set(self.volume_path) - set(self.volume_done))
         if self.mode == 'train':
-            self.volume_sample = volume_rest[int(np.floor(random.random() * len(volume_rest)))]
-            index = self.volume_path.index(self.volume_sample)
-            if self.label_path is not None:
-                self.label_sample = self.label_path[index]
+            if len(self.volume_done) == len(self.volume_path):
+                self.volume_done = []
+        volume_rest = list(set(self.volume_path) - set(self.volume_done))
+        self.volume_sample = volume_rest[int(np.floor(random.random() * len(volume_rest)))]
+        index = self.volume_path.index(self.volume_sample)
+        if self.label_path is not None:
+            self.label_sample = self.label_path[index]
         self.volume_done += [self.volume_sample]
-
         if do_load:
             self.loadchunk()
 
@@ -90,7 +89,7 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
         else:
             print(rank, 'load chunk: ', self.volume_sample)
         if self.connector_dataset:
-            self.volume_sample = '/braindat/lab/liusl/flywire/block_data/train_30/connector_15_10_123.csv'
+            # self.volume_sample = '/braindat/lab/liusl/flywire/block_data/train_30/connector_15_10_123.csv'
             block_index = self.volume_sample.split('/')[-1].split('.')[0]
             block_xyz = block_index.split('_')[1:]
             img_volume_path = os.path.join(self.block_image_path, block_index, '*.png')
