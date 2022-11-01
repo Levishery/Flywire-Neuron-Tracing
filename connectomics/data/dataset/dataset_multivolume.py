@@ -80,6 +80,8 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
             self.volume_done += [self.volume_sample]
             volume_rest = list(set(self.volume_path) - set(self.volume_done))
             self.volume_sample = volume_rest[int(np.floor(random.random() * len(volume_rest)))]
+            block_index = self.volume_sample.split('/')[-1].split('.')[0]
+            img_volume_path = os.path.join(self.block_image_path, block_index)
         ## when the dataset is not complete
         index = self.volume_path.index(self.volume_sample)
         if self.label_path is not None:
