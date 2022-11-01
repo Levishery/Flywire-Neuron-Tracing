@@ -5,6 +5,8 @@ import pandas as pd
 import time
 import random
 from cloudvolume import CloudVolume
+from PIL import Image
+import matplotlib.pyplot as plt
 
 import torch.utils.data
 from ..augmentation import Compose
@@ -158,7 +160,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
         out_label = crop_volume(self.vol_ffn1, self.sample_volume_size, pos[1:])
         neg_cord_pos = list(neg_cord_pos.astype(np.int32))
         seg_negative = np.asarray(np.unique(out_label[neg_cord_pos[0], neg_cord_pos[1], neg_cord_pos[2]]))
-        seg_negative = np.setdiff1d(seg_negative, [0, seg_positive])
+        seg_negative = np.setdiff1d(seg_negative, [0, seg_positive, seg_start])
 
         data = {'image': out_volume,
                 'label': out_label,
@@ -177,7 +179,8 @@ class ConnectorDataset(torch.utils.data.Dataset):
         out_weight = seg_to_weights(out_target, self.weight_opt, out_valid, out_label)
         out_volume = np.expand_dims(out_volume, 0)
         out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
-
+        # plt.imshow(out_volume[0,15,:,:]*out_target[0][1,0,15,:,:]/out_target[0][1,0,15,:,:].max()*0.5 + out_volume[0,15,:,:]*0.5)
+        # plt.savefig('/braindat/lab/liusl/flywire/experiment/debug_dataset/' + str(cord) + '.png')
         return pos_data, out_volume, out_target, out_weight
 
     def _connector_to_volume_sample(self, connector):

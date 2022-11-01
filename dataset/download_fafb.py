@@ -119,7 +119,7 @@ def download():
                 print('fail to download', file_name)
             os.makedirs(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14', folder_name))
             for i in range(84):
-                im = Image.fromarray(volume[:, :, i, 0]).transpose(Image.ROTATE_180)
+                im = Image.fromarray(volume[:, :, i, 0])
                 im.save(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14', os.path.join(folder_name, str(i).zfill(4)+'.png')))
 
 

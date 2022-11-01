@@ -9,23 +9,23 @@ MODEL:
   TARGET_OPT: ["e"]
   LOSS_OPTION:
     [[ "DiscriminativeLoss", "ConnectionLoss" ]]
-  LOSS_WEIGHT: [[ 1.0, 1.0 ]]
+  LOSS_WEIGHT: [[ 1.0, 0.1 ]]
   WEIGHT_OPT: [[ "0", "0" ]]
   OUTPUT_ACT: [[ "none",  "none" ]]
 MONITOR:
   ITERATION_NUM: [20, 200]
 SOLVER:
-  ITERATION_VAL: 400
+  ITERATION_VAL: 4000
 DATASET:
   CONNECTOR_DATSET: True
   IMAGE_NAME:
   LABEL_NAME:
   VAL_PATH: /braindat/lab/liusl/flywire/block_data/val_30_sub
   INPUT_PATH: /braindat/lab/liusl/flywire/block_data/train_30
-  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet-connector
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet-connector-test
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True
-  DATA_CHUNK_ITER: 400
+  DATA_CHUNK_ITER: 800
 INFERENCE:
   OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
   OUTPUT_NAME: result.h5

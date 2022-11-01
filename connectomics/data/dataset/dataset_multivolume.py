@@ -72,6 +72,15 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
                 self.volume_done = []
         volume_rest = list(set(self.volume_path) - set(self.volume_done))
         self.volume_sample = volume_rest[int(np.floor(random.random() * len(volume_rest)))]
+        ## when the dataset is not complete
+        block_index = self.volume_sample.split('/')[-1].split('.')[0]
+        img_volume_path = os.path.join(self.block_image_path, block_index)
+        while not os.path.exists(img_volume_path):
+            print('%s do not exist' % img_volume_path)
+            self.volume_done += [self.volume_sample]
+            volume_rest = list(set(self.volume_path) - set(self.volume_done))
+            self.volume_sample = volume_rest[int(np.floor(random.random() * len(volume_rest)))]
+        ## when the dataset is not complete
         index = self.volume_path.index(self.volume_sample)
         if self.label_path is not None:
             self.label_sample = self.label_path[index]
@@ -89,7 +98,7 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
         else:
             print(rank, 'load chunk: ', self.volume_sample)
         if self.connector_dataset:
-            # self.volume_sample = '/braindat/lab/liusl/flywire/block_data/train_30/connector_15_10_123.csv'
+            # self.volume_sample = '/braindat/lab/liusl/flywire/block_data/train_30/connector_25_7_113.csv'
             block_index = self.volume_sample.split('/')[-1].split('.')[0]
             block_xyz = block_index.split('_')[1:]
             img_volume_path = os.path.join(self.block_image_path, block_index, '*.png')

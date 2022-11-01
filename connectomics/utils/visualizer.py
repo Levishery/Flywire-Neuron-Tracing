@@ -62,7 +62,9 @@ class Visualizer(object):
             if topt[0] == 'e':
                 output[idx] = self.emb2rgb(output[idx])
                 if label[idx].dim() == 6:
-                    label[idx] = label[idx][:, 1, :, :, :, :] / label[idx][:, 1, :, :, :, :].max() + 1e-6
+                    volume_vis = volume.detach().cpu()
+                    label_tmp = label[idx][:, 1, :, :, :, :] / label[idx][:, 1, :, :, :, :].max() + 1e-6
+                    label[idx] = label_tmp*volume_vis*0.5 + volume_vis*0.5
                 else:
                     label[idx] = label[idx] / label[idx].max() + 1e-6
             RGB = (topt[0] in ['1', '2', '9', 'e'])
@@ -181,7 +183,7 @@ class Visualizer(object):
 
     def plot_distance(self, distance_pos, distance_neg, iteration, writer, name=None):
         distance_neg = np.concatenate([np.asarray(sample.cpu()) for sample in distance_neg])
-        distance_pos = np.asarray([np.asarray(sample.cpu()) for sample in distance_pos])
+        distance_pos = np.concatenate([np.asarray(sample.cpu()) for sample in distance_pos])
         random.shuffle(distance_neg)
         plt.scatter(np.random.rand(len(distance_neg)), np.asarray(distance_neg), c='black', s=5)
         plt.scatter(np.random.rand(len(distance_pos)), np.asarray(distance_pos), c='red', s=5)

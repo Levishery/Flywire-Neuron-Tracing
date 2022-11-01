@@ -299,13 +299,12 @@ class DiscriminativeLoss(nn.Module):
 
 
 class ConnectionLoss(nn.Module):
-    def __init__(self, delta_v=0.5, delta_d=3, alpha=1, beta=1, gama=0.001):
+    def __init__(self, delta_v=0.5, delta_d=3, alpha=0.1, beta=1):
         super().__init__()
         self.delta_v = delta_v
         self.delta_d = delta_d
         self.alpha = alpha
         self.beta = beta
-        self.gama = gama
 
     def connection_loss(self, embedding, seg_gt, get_distance=False):
         batch_size = embedding.shape[0]
@@ -318,18 +317,32 @@ class ConnectionLoss(nn.Module):
         # positive loss: pull s_start and s_pos closer
         dist_pos_show = []
         classification_show = []
+        dist_neg_show = []
         for b in range(batch_size):
             embedding_b = embedding[b]  # (embed_dim, D, H, W)
             positive_map_b = positive_map[b].squeeze()
 
-            labels = torch.unique(positive_map_b)
-            labels = labels[labels != 0]
-            num_id_pos = len(labels)
-            if num_id_pos != 2:
-                print('DEBUG')
+            labels_pos = torch.unique(positive_map_b)
+            labels_pos = labels_pos[labels_pos != 0]
+            num_id_pos = len(labels_pos)
+            # negative loss: push s_start and s_neg apart
+            negative_map_b = negative_map[b].squeeze()
+
+            labels_neg = torch.unique(negative_map_b)
+            labels_neg = labels_neg[labels_neg != 0]
+            num_id_neg = len(labels_neg)
+
+            if num_id_pos < 2 or num_id_neg < 1:
+                # please refer to issue here: https://github.com/harryhan618/LaneNet/issues/12
+                _nonsense = embedding.sum()
+                _zero = torch.zeros_like(_nonsense)
+                connect_loss = connect_loss + _nonsense * _zero
+                apart_loss = apart_loss + _nonsense * _zero
+                # if get_distance: just not record
+                continue
 
             centroid_mean_pos = []
-            for idx in labels:
+            for idx in labels_pos:
                 seg_mask_i = (positive_map_b == idx)
                 if not seg_mask_i.any():
                     continue
@@ -338,30 +351,18 @@ class ConnectionLoss(nn.Module):
                 mean_i = torch.mean(embedding_i, dim=1)  # ????
                 # print(mean_i.shape)
                 centroid_mean_pos.append(mean_i)
-
             centroid_mean_pos = torch.stack(centroid_mean_pos)  # (n_lane, embed_dim)
 
-            if num_id_pos > 1:
-                centroid_mean1 = centroid_mean_pos.reshape(-1, 1, embed_dim)
-                centroid_mean2 = centroid_mean_pos.reshape(1, -1, embed_dim)
-                dist_pos = torch.norm(centroid_mean1 - centroid_mean2, dim=2)
-                dist_pos_show.append(dist_pos[0, 1].clone().detach().expand(1))
+            centroid_mean1 = centroid_mean_pos.reshape(-1, 1, embed_dim)
+            centroid_mean2 = centroid_mean_pos.reshape(1, -1, embed_dim)
+            dist_pos = torch.norm(centroid_mean1 - centroid_mean2, dim=2)
+            dist_pos_show.append(dist_pos[0, 1].clone().detach().expand(1))
 
-                # divided by two for double calculated loss above, for implementation convenience
-                connect_loss = connect_loss + torch.sum(dist_pos ** 2) / (num_id_pos * (num_id_pos - 1)) / 2
-
-        # negative loss: push s_start and s_neg apart
-        dist_neg_show = []
-        for b in range(batch_size):
-            embedding_b = embedding[b]  # (embed_dim, D, H, W)
-            negative_map_b = negative_map[b].squeeze()
-
-            labels = torch.unique(negative_map_b)
-            labels = labels[labels != 0]
-            num_id_neg = len(labels)
+            # divided by two for double calculated loss above, for implementation convenience
+            connect_loss = connect_loss + torch.sum(dist_pos ** 2) / (num_id_pos * (num_id_pos - 1)) / 2
 
             centroid_mean_neg = []
-            for idx in labels:
+            for idx in labels_neg:
                 seg_mask_i = (negative_map_b == idx)
                 if not seg_mask_i.any():
                     continue
@@ -377,7 +378,7 @@ class ConnectionLoss(nn.Module):
                 centroid_mean2 = centroid_mean_neg.reshape(1, -1, embed_dim)
                 dist_neg = torch.norm(centroid_mean1 - centroid_mean2, dim=2)  # shape (num_id, num_id)
                 dist_neg_show.append(dist_neg[0, :].clone().detach())
-                if (dist_pos_show[b] < dist_neg_show[-1]).all():
+                if sum(dist_pos_show[-1] > dist_neg_show[-1]) < 1:
                     classification_show.append(True)
                 else:
                     classification_show.append(False)

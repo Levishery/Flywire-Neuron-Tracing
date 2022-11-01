@@ -1,7 +1,7 @@
 # All other configurations are set by default. If you want to add new config options,
 # please modify ../connectomics/config/defaults.py
 SYSTEM:
-  NUM_GPUS: 1
+  NUM_GPUS: 4
   NUM_CPUS: 4
 MODEL:
   INPUT_SIZE: [17, 227, 227]
@@ -24,9 +24,10 @@ DATASET:
   OUTPUT_PATH: /data12T/janechen/SNEMI3D/
   PAD_SIZE: [4, 64, 64]
 SOLVER:
-  LR_SCHEDULER_NAME: WarmupCosineLR
-  BASE_LR: 0.04
-  ITERATION_STEP: 1
+  LR_SCHEDULER_NAME: "MultiStepLR"
+  NAME: Adam
+  BASE_LR: 1e-04
+  STEPS: (100000, 150000)
   ITERATION_SAVE: 10000
   ITERATION_TOTAL: 500000
   SAMPLES_PER_BATCH: 2 # PER GPU

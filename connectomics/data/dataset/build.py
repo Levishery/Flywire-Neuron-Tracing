@@ -238,7 +238,10 @@ def get_dataset(cfg,
         "ssl": False if cfg.MODEL.SSL == 'none' else True,
     }
     if cfg.DATASET.DO_MULTI_VOLUME:  # build MultiVolumeDataset
-        dir_name = _get_file_list(cfg.DATASET.INPUT_PATH)
+        if mode == 'val':
+            dir_name = _get_file_list(cfg.DATASET.VAL_PATH)
+        else:
+            dir_name = _get_file_list(cfg.DATASET.INPUT_PATH)
         img_name = None
         if cfg.DATASET.IMAGE_NAME is not None:
             img_name = _get_file_list(cfg.DATASET.IMAGE_NAME)
@@ -251,23 +254,7 @@ def get_dataset(cfg,
             label_path = _make_path_list(cfg, dir_name, label_name, rank)
             assert len(label_name) == len(img_name)
         dataset = MultiVolumeDataset(volume_path, label_path, pad_size=cfg.DATASET.PAD_SIZE,
-                                     chunk_iter=cfg.DATASET.DATA_CHUNK_ITER,
-                                     pad_mode=cfg.DATASET.PAD_MODE, **shared_kwargs)
-
-    elif cfg.DATASET.CONNECTOR_DATSET:  # build ConnectorDataset
-        if mode == 'val':
-            dir_name = _get_file_list(cfg.DATASET.VAL_PATH)
-        else:
-            dir_name = _get_file_list(cfg.DATASET.INPUT_PATH)
-        img_name = None
-        if cfg.DATASET.IMAGE_NAME is not None:
-            img_name = _get_file_list(cfg.DATASET.IMAGE_NAME)
-
-        volume_path = _make_path_list(cfg, dir_name, img_name, rank)
-        label_path = volume_path
-        print('build ConnectorDataset for rank:', rank)
-        dataset = MultiVolumeDataset(volume_path, label_path, pad_size=cfg.DATASET.PAD_SIZE,
-                                     chunk_iter=cfg.DATASET.DATA_CHUNK_ITER,
+                                     chunk_iter=cfg.DATASET.DATA_CHUNK_ITER * cfg.SOLVER.SAMPLES_PER_BATCH,
                                      pad_mode=cfg.DATASET.PAD_MODE, **shared_kwargs)
 
     elif cfg.DATASET.DO_CHUNK_TITLE == 1:  # build TileDataset
