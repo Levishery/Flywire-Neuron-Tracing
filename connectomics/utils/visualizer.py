@@ -45,6 +45,7 @@ class Visualizer(object):
         # split the prediction into chunks along the channel dimension
         volume = (volume * self.cfg.DATASET.STD) + self.cfg.DATASET.MEAN
         output = self.act(output)
+        name_ids = None
         assert len(output) == len(label)
 
         for idx in range(len(self.cfg.MODEL.TARGET_OPT)):
@@ -64,6 +65,10 @@ class Visualizer(object):
                 if label[idx].dim() == 6:
                     volume_vis = volume.detach().cpu()
                     label_tmp = label[idx][:, 1, :, :, :, :] / label[idx][:, 1, :, :, :, :].max() + 1e-6
+                    seg_ids = np.setdiff1d(np.asarray(np.unique(np.asarray(label[idx][:, 1, :, :, :, :].detach().cpu()))), [0])
+                    name_ids = str(int(seg_ids[0])) + ',' + str(int(seg_ids[1])) + ',' + str(int(seg_ids[2])) + ',' + str(int(seg_ids[3]))
+                    print(name_ids, iter_total)
+                    writer.add_text('seg_ids', name_ids, iter_total)
                     label[idx] = label_tmp*volume_vis*0.5 + volume_vis*0.5
                 else:
                     label[idx] = label[idx] / label[idx].max() + 1e-6
@@ -71,6 +76,8 @@ class Visualizer(object):
             vis_name = self.cfg.MODEL.TARGET_OPT[idx] + '_' + str(idx)
             if suffix is not None:
                 vis_name = vis_name + '_' + suffix
+            # if name_ids is not None:
+            #     vis_name = vis_name + '_' + name_ids
             if isinstance(label[idx], (np.ndarray, np.generic)):
                 label[idx] = torch.from_numpy(label[idx])
 

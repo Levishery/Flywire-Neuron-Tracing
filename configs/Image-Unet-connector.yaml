@@ -14,8 +14,6 @@ MODEL:
   OUTPUT_ACT: [[ "none",  "none" ]]
 MONITOR:
   ITERATION_NUM: [20, 200]
-SOLVER:
-  ITERATION_VAL: 4000
 DATASET:
   CONNECTOR_DATSET: True
   IMAGE_NAME:
@@ -25,7 +23,6 @@ DATASET:
   OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet-connector-test
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True
-  DATA_CHUNK_ITER: 800
 INFERENCE:
   OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
   OUTPUT_NAME: result.h5

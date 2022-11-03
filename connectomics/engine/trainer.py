@@ -21,6 +21,7 @@ from ..data.dataset import build_dataloader, get_dataset
 from ..data.dataset.build import _get_file_list
 from ..data.utils import build_blending_matrix, writeh5, get_connection_distance
 from ..data.utils import get_padsize, array_unpad
+DECAY_LOSS_WEIGHT = True
 
 
 class Trainer(object):
@@ -141,6 +142,8 @@ class Trainer(object):
         # update learning rate
         self.maybe_update_swa_model(iter_total)
         self.scheduler_step(iter_total, loss)
+        if DECAY_LOSS_WEIGHT:
+            self.criterion.update_weight(iter_total)
 
         if self.is_main_process:
             self.iter_time = time.perf_counter() - self.start_time
@@ -186,6 +189,7 @@ class Trainer(object):
                     classification_list = classification_list + classification
         name = self.dataset_val.volume_sample.split('/')[-1]
         accuracy = sum(classification_list)/len(classification_list)
+        print('%s accuracy: ' % name, accuracy)
         if hasattr(self, 'monitor'):
             self.monitor.logger.log_tb.add_scalar(
                 '%s_Validation_Loss' % name, val_loss, iter_total)
@@ -357,9 +361,9 @@ class Trainer(object):
                      'lr_scheduler': self.lr_scheduler.state_dict()}
 
             # Saves checkpoint to experiment directory
-            filename = 'checkpoint_%05d.pth.tar' % (iteration + 1)
+            filename = 'checkpoint_%05d.pth' % (iteration + 1)
             if is_best:
-                filename = 'checkpoint_best.pth.tar'
+                filename = 'checkpoint_best.pth'
             filename = os.path.join(self.output_dir, filename)
             torch.save(state, filename)
 
@@ -513,6 +517,7 @@ class Trainer(object):
                 print('chunk time:', time.time()-self.chunk_time)
                 # ITERATION_VAL should be k*DATA_CHUNK_ITER
                 if self.dataset_val is not None and self.start_iter % self.cfg.SOLVER.ITERATION_VAL == 0:
+                    self.dataset_val.volume_done = []
                     while len(self.dataset_val.volume_done) < len(self.dataset_val.volume_path):
                         self.dataset_val.updatechunk()
                         self.val_loader = build_dataloader(self.cfg, None, mode='val', dataset=self.dataset_val.dataset)

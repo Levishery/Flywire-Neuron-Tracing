@@ -7,6 +7,7 @@ MODEL:
   INPUT_SIZE: [17, 227, 227]
   OUTPUT_SIZE: [17, 227, 227]
   IN_PLANES: 1
+  ISOTROPY: [ False, True, True, True, True ]
   OUT_PLANES: 3
   TARGET_OPT: ["2"] # '0': binary mask; '1': synaptic polarity; '2': affinity; '3': small object mask;
   # '4': instance boundary mask '5': distance transform (instance) '6': distance transform (semantic);
@@ -23,13 +24,15 @@ DATASET:
   INPUT_PATH: /data12T/janechen/SNEMI3D/ # or your own dataset path
   OUTPUT_PATH: /data12T/janechen/SNEMI3D/
   PAD_SIZE: [4, 64, 64]
+  DATA_CHUNK_ITER: 800
 SOLVER:
   LR_SCHEDULER_NAME: "MultiStepLR"
   NAME: Adam
   BASE_LR: 1e-04
   STEPS: (100000, 150000)
-  ITERATION_SAVE: 10000
+  ITERATION_SAVE: 8000
   ITERATION_TOTAL: 500000
+  ITERATION_VAL: 4000
   SAMPLES_PER_BATCH: 2 # PER GPU
 MONITOR:
   ITERATION_NUM: [20, 200]

@@ -147,7 +147,7 @@ class Criterion(object):
                 if key is not None:
                     loss_tag += '_' + key
                 assert loss_tag not in losses_vis.keys()
-                losses_vis[loss_tag] = loss_temp
+                losses_vis[loss_tag] = loss_temp/self.loss_w[i][j]
 
         for i in range(self.num_regu):
             targets = [x[j] for j in self.regu_t[i]]
@@ -210,3 +210,7 @@ class Criterion(object):
         return cls(device, cfg.MODEL.TARGET_OPT, cfg.MODEL.LOSS_OPTION, cfg.MODEL.OUTPUT_ACT,
                    cfg.MODEL.LOSS_WEIGHT, loss_kwargs, cfg.MODEL.REGU_OPT, cfg.MODEL.REGU_TARGET,
                    cfg.MODEL.REGU_WEIGHT, do_2d=cfg.DATASET.DO_2D)
+
+    def update_weight(self, iteration):
+        weight_tmp = 1 - 1e-5 * iteration
+        self.loss_w[0][0] = weight_tmp
