@@ -21,7 +21,6 @@ from ..data.dataset import build_dataloader, get_dataset
 from ..data.dataset.build import _get_file_list
 from ..data.utils import build_blending_matrix, writeh5, get_connection_distance
 from ..data.utils import get_padsize, array_unpad
-DECAY_LOSS_WEIGHT = True
 
 
 class Trainer(object):
@@ -142,7 +141,7 @@ class Trainer(object):
         # update learning rate
         self.maybe_update_swa_model(iter_total)
         self.scheduler_step(iter_total, loss)
-        if DECAY_LOSS_WEIGHT:
+        if self.cfg.SOLVER.DECAY_LOSS_WEIGHT:
             self.criterion.update_weight(iter_total)
 
         if self.is_main_process:

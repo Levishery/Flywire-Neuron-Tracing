@@ -66,9 +66,11 @@ class Visualizer(object):
                     volume_vis = volume.detach().cpu()
                     label_tmp = label[idx][:, 1, :, :, :, :] / label[idx][:, 1, :, :, :, :].max() + 1e-6
                     seg_ids = np.setdiff1d(np.asarray(np.unique(np.asarray(label[idx][:, 1, :, :, :, :].detach().cpu()))), [0])
-                    name_ids = str(int(seg_ids[0])) + ',' + str(int(seg_ids[1])) + ',' + str(int(seg_ids[2])) + ',' + str(int(seg_ids[3]))
-                    print(name_ids, iter_total)
-                    writer.add_text('seg_ids', name_ids, iter_total)
+                    if len(seg_ids) > 0:
+                        name_ids = 'ids: '
+                        for id in seg_ids:
+                            name_ids = name_ids + str(int(id)) + ','
+                        writer.add_text('seg_ids', name_ids, iter_total)
                     label[idx] = label_tmp*volume_vis*0.5 + volume_vis*0.5
                 else:
                     label[idx] = label[idx] / label[idx].max() + 1e-6

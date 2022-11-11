@@ -117,6 +117,7 @@ def download():
                 volume = fafb_v14[start_x:end_x, start_y:end_y, start_z:end_z]
             except:
                 print('fail to download', file_name)
+                continue
             os.makedirs(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14', folder_name))
             for i in range(84):
                 im = Image.fromarray(volume[:, :, i, 0])

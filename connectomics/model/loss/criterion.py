@@ -212,5 +212,5 @@ class Criterion(object):
                    cfg.MODEL.REGU_WEIGHT, do_2d=cfg.DATASET.DO_2D)
 
     def update_weight(self, iteration):
-        weight_tmp = 1 - 1e-5 * iteration
+        weight_tmp = max(1 - 1e-5 * iteration, 1e-5)
         self.loss_w[0][0] = weight_tmp
