@@ -1,10 +1,9 @@
-# learn dense 3d image embedding with V-net
 MODEL:
-  INPUT_SIZE: [ 32, 160, 160 ]
-  OUTPUT_SIZE: [ 32, 160, 160 ]
-  ARCHITECTURE: unet_3d
-  BLOCK_TYPE: residual_se
-  FILTERS: [32, 64, 96, 128, 160]
+  INPUT_SIZE: [ 16, 128, 128 ]
+  OUTPUT_SIZE: [ 16, 128, 128 ]
+  ARCHITECTURE: swin_unetr
+  ISOTROPY: [True, False, True, True, True]
+  POOLING_LAYER: True  # used in unet
   OUT_PLANES: 16
   TARGET_OPT: ["e"]
   LOSS_OPTION:
@@ -16,12 +15,15 @@ MONITOR:
   ITERATION_NUM: [20, 200]
 SOLVER:
   LR_SCHEDULER_NAME: "MultiStepLR"
-  NAME: Adam
-  BASE_LR: 1e-03
+  NAME: AdamW
+  BASE_LR: 2e-03
+  WARMUP_FACTOR: 2e-5
+  WARMUP_ITERS: 50000
   STEPS: (250000, 500000)
   ITERATION_SAVE: 8000
   ITERATION_TOTAL: 2000000
   ITERATION_VAL: 4000
+  SAMPLES_PER_BATCH: 4 # PER GPU
 DATASET:
   CONNECTOR_DATSET: True
   IMAGE_NAME:
@@ -35,6 +37,7 @@ INFERENCE:
   OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
   OUTPUT_NAME: result.h5
   OUTPUT_ACT: ["none"]
+  SAMPLES_PER_BATCH: 4 # per gpu
 AUGMENTOR:
   SMOOTH: False
   MISSINGPARTS:

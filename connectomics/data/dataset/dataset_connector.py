@@ -4,9 +4,11 @@ import numpy as np
 import pandas as pd
 import time
 import random
+import cc3d
 from cloudvolume import CloudVolume
 from PIL import Image
 import matplotlib.pyplot as plt
+import tifffile as tf
 
 import torch.utils.data
 from ..augmentation import Compose
@@ -56,6 +58,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
                  weight_opt: WEIGHT_OPT_TYPE = [['1']],
                  erosion_rates: Optional[List[int]] = None,
                  dilation_rates: Optional[List[int]] = None,
+                 relabel = True,
                  **kwargs):
 
         assert mode in ['train', 'val', 'test']
@@ -70,6 +73,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
         self.connector_num = len(self.connector_list)
         self.sample_num_a = len(self.connector_list)
         self.label = None
+        self.relabel = relabel
         self.valid_mask = None
         self.augmentor = augmentor
         # target and weight options
@@ -90,9 +94,9 @@ class ConnectorDataset(torch.utils.data.Dataset):
         self.model_input_size = model_input_size
 
         # random sample factors
-        self.alpha_neg = 10
-        self.alpha_offset = 10
-        self.neg_point_num = 100
+        self.alpha_neg = 5
+        self.alpha_offset = 20
+        self.neg_point_num = 300
 
         # For relatively small volumes, the total number of samples can be generated is smaller
         # than the number of samples required for training (i.e., iteration * batch size). Thus
@@ -119,11 +123,33 @@ class ConnectorDataset(torch.utils.data.Dataset):
             # print(idx)
             connector = self.connector_list.iloc[idx]
             # connector = self.connector_list.iloc[386]
-            return self._connector_to_target_sample(connector)
+            pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample(connector)
+            while pos_data is None:
+                # this data is not suitable for training
+                idx = random.randint(0, self.connector_num - 1)
+                # print(idx)
+                connector = self.connector_list.iloc[idx]
+                pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample(connector)
+            return pos_data, out_volume, out_target, out_weight
 
         elif self.mode == 'val':
             connector = self.connector_list.iloc[index]
-            return self._connector_to_target_sample(connector)
+            pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample_vali(connector)
+            # return all zero for invalid samples, which will not be computed by connection loss
+            if pos_data is None:
+                pos_data = {'pos': [0, 0, 0, 0],
+                            'seg_start': 0,
+                            'seg_positive': 0,
+                            'seg_target_relabeled': [0],
+                            'seg_negative': [0]}
+                out_volume = np.zeros(self.model_input_size).astype(np.float32)
+                out_volume = np.expand_dims(out_volume, 0)
+                out_label = np.zeros(self.model_input_size)
+                out_valid = np.zeros(self.model_input_size)
+                out_target = seg_to_targets(
+                    out_label, self.target_opt, self.erosion_rates, self.dilation_rates, segment_info=pos_data)
+                out_weight = seg_to_weights(out_target, self.weight_opt, out_valid, out_label)
+            return pos_data, out_volume, out_target, out_weight
 
         elif self.mode == 'test':
             connector = self.connector_list.iloc[index]
@@ -132,45 +158,92 @@ class ConnectorDataset(torch.utils.data.Dataset):
     def _crop_with_pos(self, pos, vol_size):
         out_volume = (crop_volume(
             self.volume[pos[0]], vol_size, pos[1:]) / 255.0).astype(np.float32)
-        return pos, out_volume
+        return np.array(pos).astype(np.int32), out_volume
 
     def _connector_to_target_sample(self, connector):
-        np.random.seed(random.randint(0,10))
+        np.random.seed(random.randint(0, 100))
         cord = connector[2][1:-1].split()
+        cord_start_offset = np.asarray(connector[3][1:-1].split(), dtype=np.float32) - np.asarray(cord, dtype=np.float32)
+        cord_start_offset = np.asarray([cord_start_offset[0] / 4, cord_start_offset[1] / 4, cord_start_offset[2]])
+        cord_pos_offset = np.asarray(connector[4][1:-1].split(), dtype=np.float32) - np.asarray(cord, dtype=np.float32)
+        cord_pos_offset = np.asarray([cord_pos_offset[0]/4, cord_pos_offset[1]/4, cord_pos_offset[2]])
+        if np.any(np.abs(cord_start_offset - cord_pos_offset) > np.asarray([self.sample_volume_size[1]-32, self.sample_volume_size[2]-32, self.sample_volume_size[0]-2], dtype=np.float32)):
+            return None, None, None, None
         cord = self.fafb_to_block(float(cord[0]), float(cord[1]), float(cord[2]))
+        cord_start = cord + np.asarray(cord_start_offset)
+        cord_pos = cord + np.asarray(cord_pos_offset)
 
         # sample the nearby segments as negative samples, while masking the others as background
-        out_valid = None
         seg_start = connector[0]
         seg_positive = connector[1]
-        neg_cord_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_neg, self.model_input_size[1] / self.alpha_neg, self.neg_point_num)
 
         # use random offset to prevent the model from using the position information
         sample_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_offset, self.model_input_size[1] / self.alpha_offset, 1)
-        while not self.is_valid_offset(sample_offset, cord):
+        count = 0
+        while not (self.is_valid_offset(sample_offset, cord)):
             sample_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_offset, self.model_input_size[1] / self.alpha_offset, 1)
+            count = count + 1
+            if count > 10:  # this data point cannot be sampled, because it's at the boundary of a block and have a large gap between seg_start and seg_positive
+                return None, None, None, None
 
-        # the negative position should be around the connection point
-        neg_cord_offset = neg_cord_offset - sample_offset
-        neg_cord_offset = np.asarray([np.clip(neg_cord_offset[0], - self.model_input_size[0] / 2, self.model_input_size[0] / 2 - 1), np.clip(neg_cord_offset[1], - self.model_input_size[1] / 2, self.model_input_size[1] / 2 - 1), np.clip(neg_cord_offset[2], - self.model_input_size[2] / 2, self.model_input_size[2] / 2 - 1)])
-        neg_cord_pos = neg_cord_offset + np.transpose(np.asarray([self.sample_volume_size / 2]))
+        # sample_offset = np.asarray([[0], [0], [0]])
         pos, out_volume = self._crop_with_pos([0, cord[2] - self.sample_volume_size[0] / 2 + sample_offset[0][0],
                                                cord[0] - self.sample_volume_size[1] / 2 + sample_offset[1][0],
                                                cord[1] - self.sample_volume_size[2] / 2 + sample_offset[2][0]], self.sample_volume_size)
         out_label = crop_volume(self.vol_ffn1, self.sample_volume_size, pos[1:])
-        neg_cord_pos = list(neg_cord_pos.astype(np.int32))
-        seg_negative = np.asarray(np.unique(out_label[neg_cord_pos[0], neg_cord_pos[1], neg_cord_pos[2]]))
-        seg_negative = np.setdiff1d(seg_negative, [0, seg_positive, seg_start])
+        cord_start = np.round(np.array([cord_start[2] - pos[1], cord_start[0] - pos[2], cord_start[1] - pos[3]])).astype(np.int32)
+        cord_start = np.clip(cord_start, [1, 1, 1], self.sample_volume_size-2)
+        cord_pos = np.round(np.array([cord_pos[2] - pos[1], cord_pos[0] - pos[2], cord_pos[1] - pos[3]])).astype(np.int32)
+        cord_pos = np.clip(cord_pos, [1, 1, 1], self.sample_volume_size-2)
 
+        # if not (out_label[cord_start[0], cord_start[1], cord_start[2]] == seg_start and out_label[cord_pos[0], cord_pos[1], cord_pos[2]] == seg_positive):
+        #     # the mapping of cord_start and cord_pos is not accurate for some reason
+        #     return None, None, None, None
+        out_valid = np.zeros(out_label.shape, dtype=bool)
+        # out_valid[cord_start[0], cord_start[1], cord_start[2]] = True
+        # out_valid[cord_pos[0], cord_pos[1], cord_pos[2]] = True
+        out_valid[cord_start[0]-1:cord_start[0]+2, cord_start[1]-4:cord_start[1]+5, cord_start[2]-4:cord_start[2]+5] = True
+        out_valid[cord_pos[0]-1:cord_pos[0]+2, cord_pos[1]-4:cord_pos[1]+5, cord_pos[2]-4:cord_pos[2]+5] = True
+        out_valid = np.logical_and(out_valid, np.logical_or(out_label == seg_start, out_label == seg_positive))
+
+        if out_valid is not None:
+            assert 'valid_mask' in self.augmentor.additional_targets.keys(), \
+                "Need to specify the 'valid_mask' option in additional_targets " \
+                "of the data augmentor when training with partial annotation."
         data = {'image': out_volume,
                 'label': out_label,
                 'valid_mask': out_valid}
         augmented = self.augmentor(data)
         out_volume, out_label = augmented['image'], augmented['label']
         out_valid = augmented['valid_mask']
+        if self.relabel:
+            out_label, seg_target_relabeled = self.relabel_connected_componet(out_label, out_valid)
+        else:
+            seg_target_relabeled = [seg_start, seg_positive]
+        if not len(seg_target_relabeled) == 2:  #  cannot determine positive ids after augmentation
+            # print('invalid ', sample_offset)
+            return None, None, None, None
+
+        # the negative position should be around the connection point
+        # print(sample_offset)
+        neg_cord_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_neg, self.model_input_size[1] / self.alpha_neg, self.neg_point_num)
+        neg_cord_offset = neg_cord_offset - sample_offset
+        neg_cord_offset = np.asarray(
+            [np.clip(neg_cord_offset[0], - self.model_input_size[0] / 2, self.model_input_size[0] / 2 - 1),
+             np.clip(neg_cord_offset[1], - self.model_input_size[1] / 2, self.model_input_size[1] / 2 - 1),
+             np.clip(neg_cord_offset[2], - self.model_input_size[2] / 2, self.model_input_size[2] / 2 - 1)])
+        neg_cord_pos = neg_cord_offset + np.transpose(np.asarray([np.asarray(self.model_input_size) / 2]))
+        neg_cord_pos = list(neg_cord_pos.astype(np.int32))
+
+        seg_negative = np.setdiff1d(np.asarray(np.unique(out_label[neg_cord_pos[0], neg_cord_pos[1], neg_cord_pos[2]])), [0, seg_target_relabeled[0], seg_target_relabeled[1]])
+        np.random.shuffle(seg_negative)
+        # fixed number of seg_negative
+        seg_negative = seg_negative[:20]
+
         pos_data = {'pos': pos,
                     'seg_start': seg_start,
                     'seg_positive': seg_positive,
+                    'seg_target_relabeled': seg_target_relabeled,
                     'seg_negative': seg_negative}
         out_target = seg_to_targets(
             out_label, self.target_opt, self.erosion_rates, self.dilation_rates, segment_info=pos_data)
@@ -179,8 +252,108 @@ class ConnectorDataset(torch.utils.data.Dataset):
         out_weight = seg_to_weights(out_target, self.weight_opt, out_valid, out_label)
         out_volume = np.expand_dims(out_volume, 0)
         out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
-        # plt.imshow(out_volume[0,15,:,:]*out_target[0][1,0,15,:,:]/out_target[0][1,0,15,:,:].max()*0.5 + out_volume[0,15,:,:]*0.5)
-        # plt.savefig('/braindat/lab/liusl/flywire/experiment/debug_dataset/' + str(cord) + '.png')
+
+        # show = out_volume[0, :, :, :] * (np.clip(out_target[0][1, 0, :, :, :]*200,0,200)) / (200) * 0.7 + out_volume[0, :, :, :] * 0.3
+        # tf.imsave('/braindat/lab/liusl/flywire/experiment/debug_dataset/' + str(seg_start) + '_' + str(seg_positive) + '.tif',
+        #           ((show - show.min() / (show.max() - show.min())) * 255).astype(np.uint8))
+        # show = out_volume[0, :, :, :] * (np.clip(out_target[0][2, 0, :, :, :]*200,0,200)) / (200) * 0.7 + out_volume[0, :, :, :] * 0.3
+        # tf.imsave('/braindat/lab/liusl/flywire/experiment/debug_dataset/' + str(seg_start) + '_' + str(seg_positive) + 'nega.tif',
+        #           ((show - show.min() / (show.max() - show.min())) * 255).astype(np.uint8))
+        # print(seg_start, seg_positive)
+        # print(len(seg_negative))
+        return pos_data, out_volume, out_target, out_weight
+
+    def _connector_to_target_sample_vali(self, connector):
+
+        cord = connector[2][1:-1].split()
+        cord_start_offset = np.asarray(connector[3][1:-1].split(), dtype=np.float32) - np.asarray(cord, dtype=np.float32)
+        cord_start_offset = np.asarray([cord_start_offset[0] / 4, cord_start_offset[1] / 4, cord_start_offset[2]])
+        cord_pos_offset = np.asarray(connector[4][1:-1].split(), dtype=np.float32) - np.asarray(cord, dtype=np.float32)
+        cord_pos_offset = np.asarray([cord_pos_offset[0]/4, cord_pos_offset[1]/4, cord_pos_offset[2]])
+        if np.any(np.abs(cord_start_offset - cord_pos_offset) > np.asarray([self.sample_volume_size[1]-32, self.sample_volume_size[2]-32, self.sample_volume_size[0]-2], dtype=np.float32)):
+            return None, None, None, None
+        cord = self.fafb_to_block(float(cord[0]), float(cord[1]), float(cord[2]))
+        cord_start = cord + cord_start_offset
+        cord_pos = cord + cord_pos_offset
+
+        # sample the nearby segments as negative samples, while masking the others as background
+        seg_start = connector[0]
+        seg_positive = connector[1]
+
+        # use random offset to prevent the model from using the position information
+        sample_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_offset, self.model_input_size[1] / self.alpha_offset, 1)
+        count = 0
+        while not (self.is_valid_offset(sample_offset, cord)):
+            sample_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_offset, self.model_input_size[1] / self.alpha_offset, 1)
+            count = count + 1
+            if count > 10:  # this data point cannot be sampled, because it's at the boundary of a block and have a large gap between seg_start and seg_positive
+                return None, None, None, None
+
+
+        pos, out_volume = self._crop_with_pos([0, cord[2] - self.sample_volume_size[0] / 2 + sample_offset[0][0],
+                                               cord[0] - self.sample_volume_size[1] / 2 + sample_offset[1][0],
+                                               cord[1] - self.sample_volume_size[2] / 2 + sample_offset[2][0]], self.sample_volume_size)
+        out_label = crop_volume(self.vol_ffn1, self.sample_volume_size, pos[1:])
+        cord_start = np.round(np.array([cord_start[2] - pos[1], cord_start[0] - pos[2], cord_start[1] - pos[3]])).astype(np.int32)
+        cord_start = np.clip(cord_start, [1, 1, 1], self.sample_volume_size-2)
+        cord_pos = np.round(np.array([cord_pos[2] - pos[1], cord_pos[0] - pos[2], cord_pos[1] - pos[3]])).astype(np.int32)
+        cord_pos = np.clip(cord_pos, [1, 1, 1], self.sample_volume_size-2)
+
+        # if not (out_label[cord_start[0], cord_start[1], cord_start[2]] == seg_start and out_label[cord_pos[0], cord_pos[1], cord_pos[2]] == seg_positive):
+        #     # the mapping of cord_start and cord_pos is not accurate for some reason
+        #     return None, None, None, None
+        out_valid = np.zeros(out_label.shape, dtype=bool)
+        # out_valid[cord_start[0], cord_start[1], cord_start[2]] = True
+        # out_valid[cord_pos[0], cord_pos[1], cord_pos[2]] = True
+        out_valid[cord_start[0]-1:cord_start[0]+2, cord_start[1]-4:cord_start[1]+5, cord_start[2]-4:cord_start[2]+5] = True
+        out_valid[cord_pos[0]-1:cord_pos[0]+2, cord_pos[1]-4:cord_pos[1]+5, cord_pos[2]-4:cord_pos[2]+5] = True
+        out_valid = np.logical_and(out_valid, np.logical_or(out_label == seg_start, out_label == seg_positive))
+
+        if self.relabel:
+            out_label, seg_target_relabeled = self.relabel_connected_componet(out_label, out_valid)
+        else:
+            seg_target_relabeled = [seg_start, seg_positive]
+        if not len(seg_target_relabeled) == 2:  #  cannot determine positive ids after augmentation
+            # print('invalid ', sample_offset)
+            return None, None, None, None
+
+        # the negative position should be around the connection point
+        # print(sample_offset)
+        neg_cord_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_neg, self.model_input_size[1] / self.alpha_neg, self.neg_point_num)
+        neg_cord_offset = neg_cord_offset - sample_offset
+        neg_cord_offset = np.asarray(
+            [np.clip(neg_cord_offset[0], - self.model_input_size[0] / 2, self.model_input_size[0] / 2 - 1),
+             np.clip(neg_cord_offset[1], - self.model_input_size[1] / 2, self.model_input_size[1] / 2 - 1),
+             np.clip(neg_cord_offset[2], - self.model_input_size[2] / 2, self.model_input_size[2] / 2 - 1)])
+        neg_cord_pos = neg_cord_offset + np.transpose(np.asarray([np.asarray(self.model_input_size) / 2]))
+        neg_cord_pos = list(neg_cord_pos.astype(np.int32))
+
+        seg_negative = np.setdiff1d(np.asarray(np.unique(out_label[neg_cord_pos[0], neg_cord_pos[1], neg_cord_pos[2]])), [0, seg_target_relabeled[0], seg_target_relabeled[1]])
+        np.random.shuffle(seg_negative)
+        # fixed number of seg_negative
+        seg_negative = seg_negative[:20]
+
+        pos_data = {'pos': pos,
+                    'seg_start': seg_start,
+                    'seg_positive': seg_positive,
+                    'seg_target_relabeled': seg_target_relabeled,
+                    'seg_negative': seg_negative}
+        out_target = seg_to_targets(
+            out_label, self.target_opt, self.erosion_rates, self.dilation_rates, segment_info=pos_data)
+        if DEBUG:
+            print('sampling and augmentation time: ', time.perf_counter() - self.start_time)
+        out_weight = seg_to_weights(out_target, self.weight_opt, out_valid, out_label)
+        out_volume = np.expand_dims(out_volume, 0)
+        out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
+
+        # show = out_volume[0, :, :, :] * (np.clip(out_target[0][1, 0, :, :, :]*200,0,200)) / (200) * 0.7 + out_volume[0, :, :, :] * 0.3
+        # tf.imsave('/braindat/lab/liusl/flywire/experiment/debug_dataset/' + str(seg_start) + '_' + str(seg_positive) + '.tif',
+        #           ((show - show.min() / (show.max() - show.min())) * 255).astype(np.uint8))
+        # show = out_volume[0, :, :, :] * (np.clip(out_target[0][2, 0, :, :, :]*200,0,200)) / (200) * 0.7 + out_volume[0, :, :, :] * 0.3
+        # tf.imsave('/braindat/lab/liusl/flywire/experiment/debug_dataset/' + str(seg_start) + '_' + str(seg_positive) + 'nega.tif',
+        #           ((show - show.min() / (show.max() - show.min())) * 255).astype(np.uint8))
+        # print(seg_start, seg_positive)
+        # print(len(seg_negative))
         return pos_data, out_volume, out_target, out_weight
 
     def _connector_to_volume_sample(self, connector):
@@ -221,7 +394,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
         valid_lb = np.asarray([[0], [0], [0]])
         ub = offset + np.transpose([np.asarray([cord[2], cord[1], cord[0]])]) + np.transpose([self.sample_volume_size / 2])
         valid_ub = np.transpose([self.volume[0].shape])
-        return np.all(lb.astype(np.int32) > valid_lb) and np.all(ub.astype(np.int32) < valid_ub)
+        return np.all(lb.astype(np.int32) > valid_lb) and np.all(np.round(ub).astype(np.int32) < valid_ub)
 
     def sample_from_normal3d(self, sigma_z, sigma_xy, point_num):
         # print(np.asarray([np.random.normal(0, sigma_z, point_num),
@@ -230,3 +403,14 @@ class ConnectorDataset(torch.utils.data.Dataset):
         return np.asarray([np.random.normal(0, sigma_z, point_num),
                                np.random.normal(0, sigma_xy, point_num),
                                np.random.normal(0, sigma_xy, point_num)])
+
+    def relabel_connected_componet(self, label, out_valid):
+        # relabel according to https://arxiv.org/abs/1909.09872
+        # In this implementation, one cannot distinguish start_id and positive_id after relabeling
+        labels_in = label.copy()
+        labels_out = cc3d.connected_components(labels_in, out_dtype=np.uint64)
+        labels_out = cc3d.dust(labels_out, threshold=200, connectivity=26, in_place=False)
+        positive_ids = np.setdiff1d(np.unique(labels_out[out_valid]), [0])
+        return labels_out, positive_ids
+
+

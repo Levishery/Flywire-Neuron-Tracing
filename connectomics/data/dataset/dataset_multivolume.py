@@ -100,7 +100,7 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
         else:
             print(rank, 'load chunk: ', self.volume_sample)
         if self.connector_dataset:
-            # self.volume_sample = '/braindat/lab/liusl/flywire/block_data/train_30/connector_25_7_113.csv'
+            # self.volume_sample = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train/connector_25_7_113.csv'
             block_index = self.volume_sample.split('/')[-1].split('.')[0]
             block_xyz = block_index.split('_')[1:]
             img_volume_path = os.path.join(self.block_image_path, block_index, '*.png')

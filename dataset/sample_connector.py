@@ -41,7 +41,7 @@ target_tree_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/tree_data'
 target_connector_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/connector_data'
 visualization_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/visualization'
 connector_files = os.listdir(target_connector_path)
-block_connector = '/braindat/lab/liusl/flywire/block_data/30_percent'
+block_connector = '/braindat/lab/liusl/flywire/block_data/v2/30_percent'
 thresh = 10
 
 for connector_f in tqdm(connector_files):
@@ -56,8 +56,9 @@ for connector_f in tqdm(connector_files):
         max_strahler_index = tree.nodes.strahler_index.max()
 
         for i in df.index:
-            score1 = 1 / ((1 / min(df_weight[str(int(df['node1_segid'][i]))][0], 40)) * (
-                        1 / min(df_weight[str(int(df['node0_segid'][i]))][0], 40)))
+            weight1 = df_weight[str(int(df['node1_segid'][i]))][0]
+            weight0 = df_weight[str(int(df['node0_segid'][i]))][0]
+            score1 = 1 / ((1 / min(weight1, 40)) * ( 1 / min(weight0, 40)))
             score2 = (1 / (max_strahler_index - int(df['Strahler order'][i].split('\n')[0].split(' ')[-1]) + 3))
             score = score2 * score1
             if score > thresh:
@@ -66,8 +67,13 @@ for connector_f in tqdm(connector_files):
                 cord = (cord0 + cord1) / 2
                 x_b, y_b, z_b = fafb_to_block(cord[0], cord[1], cord[2])
                 file_name = 'connector_' + str(x_b) + '_' + str(y_b) + '_' + str(z_b) + '.csv'
-                row = pd.DataFrame([{'node0_segid': int(df['node0_segid'][i]), 'node1_segid': int(df['node1_segid'][i]),
-                                    'cord': cord, 'score': score, 'neuron_id': neuron_id}])
+                # node 0 is seg_start, which is a larger segment.
+                if weight0 > weight1:
+                    row = pd.DataFrame([{'node0_segid': int(df['node0_segid'][i]), 'node1_segid': int(df['node1_segid'][i]),
+                                        'cord': cord, 'cord0': cord0, 'cord1': cord1, 'score': score, 'neuron_id': neuron_id}])
+                else:
+                    row = pd.DataFrame([{'node0_segid': int(df['node1_segid'][i]), 'node1_segid': int(df['node0_segid'][i]),
+                                        'cord': cord, 'cord0': cord1, 'cord1': cord0, 'score': score, 'neuron_id': neuron_id}])
                 row.to_csv(os.path.join(block_connector, file_name), mode='a', header=False, index=False)
     else:
         print('invalid neuron', neuron_id)
