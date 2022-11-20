@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.dirname('/code/connectomics/'))
 import argparse
-
+from cilog import create_logger
 import random
 import numpy as np
 import torch
@@ -57,6 +57,9 @@ def main():
     init_seed(manual_seed)
 
     cfg = load_cfg(args)
+    log_name = cfg.DATASET.OUTPUT_PATH + '.log'
+    create_logger(name='l1', file=log_name, sub_print=True,
+                  file_level='DEBUG')
     if args.local_rank == 0 or args.local_rank is None:
         # In distributed training, only print and save the
         # configurations using the node with local_rank=0.

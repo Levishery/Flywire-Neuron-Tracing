@@ -334,11 +334,11 @@ def seg_to_targets(label_orig: np.ndarray,
             out[tid] = label.astype(np.int64)
         elif topt[0] == 'r':  # reconstruction
             out[tid] = normalize_image(label)[np.newaxis, :].astype(np.float32)
-        elif topt[0] == 'e':  # reconstruction
+        elif topt[0] == 'e':  # embedding
             if segment_info is not None:
                 tmp = [None] * 3
                 tmp[0] = np.expand_dims(label.astype(np.int64), axis=0)
-                tmp[1] = np.expand_dims(mask_irrelevant_id(label, [segment_info['seg_start'], segment_info['seg_positive']]).astype(np.int64), axis=0)
+                tmp[1] = np.expand_dims(mask_irrelevant_id(label, segment_info['seg_target_relabeled']).astype(np.int64), axis=0)
                 tmp[2] = np.expand_dims(mask_irrelevant_id(label, segment_info['seg_negative']), axis=0)
                 out[tid] = np.stack(tmp, 0)
             else:

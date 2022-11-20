@@ -235,6 +235,7 @@ def get_dataset(cfg,
         "erosion_rates": cfg.MODEL.LABEL_EROSION,
         "dilation_rates": cfg.MODEL.LABEL_DILATION,
         "connector_dataset": cfg.DATASET.CONNECTOR_DATSET,
+        "relabel": cfg.DATASET.RELABEL,
         "ssl": False if cfg.MODEL.SSL == 'none' else True,
     }
     if cfg.DATASET.DO_MULTI_VOLUME:  # build MultiVolumeDataset
