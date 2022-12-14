@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .arch import UNet3D, UNet2D, FPN3D, DeepLabV3, UNetPlus3D, UNet3D_MALA, FC3DDiscriminator, UNet3D_MALA_encoder, BYOL, SwinUNETR, SwinTransformer, SSL
+from .arch import UNet3D, UNet2D, FPN3D, DeepLabV3, UNetPlus3D, UNet3D_MALA, FC3DDiscriminator, UNet3D_MALA_encoder, BYOL, SwinUNETR, SwinTransformer, SSL, EdgeNetwork
 from .backbone import RepVGG3D
 
 MODEL_MAP = {
@@ -18,6 +18,7 @@ MODEL_MAP = {
     'discriminator': FC3DDiscriminator,
     'swin_unetr': SwinUNETR,
     'swin_vit': SwinTransformer,
+    'EdgeNetwork': EdgeNetwork,
 }
 
 

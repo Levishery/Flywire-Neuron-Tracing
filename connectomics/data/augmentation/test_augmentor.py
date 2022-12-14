@@ -48,7 +48,7 @@ class TestAugmentor(object):
                  num_aug: Optional[int] = None,
                  scale_factors: List[float] = [1.0, 1.0, 1.0],
                  inference_act=None):
-        assert mode in ['mean', 'max', 'min']
+        assert mode in ['mean', 'max', 'min', 'concate']
         self.mode = mode
         self.do_2d = do_2d
         self.scale_factors = scale_factors
@@ -119,7 +119,7 @@ class TestAugmentor(object):
             if xflip:
                 vout = torch.flip(vout, [4])
 
-            out = self._update_output(vout, out)
+            out = self._update_output(vout, out, index=cc)
             cc += 1
 
         if self.mode == 'mean':
@@ -169,7 +169,7 @@ class TestAugmentor(object):
             if xflip:
                 vout = torch.flip(vout, [3])
 
-            out = self._update_output(vout, out)
+            out = self._update_output(vout, out, index=cc)
             cc += 1
 
         if self.mode == 'mean':
@@ -183,9 +183,10 @@ class TestAugmentor(object):
                          anti_aliasing=True)
         return out
 
-    def _update_output(self, vout, out=None):
+    def _update_output(self, vout, out=None, index=None):
         # cast to numpy array
-        vout = vout.numpy()
+        if self.mode !='concate':
+            vout = vout.numpy()
         if out is None:
             if self.mode == 'min':
                 out = np.ones(vout.shape, dtype=np.float32)
@@ -193,6 +194,14 @@ class TestAugmentor(object):
                 out = np.zeros(vout.shape, dtype=np.float32)
             elif self.mode == 'mean':
                 out = np.zeros(vout.shape, dtype=np.float32)
+            elif self.mode == 'concate':
+                shape = vout.shape
+                if len(shape) < 5:
+                    raise ValueError("spatial dimension should be 3 for embedding concatenation.")
+                # (B, C, Z, Y, X)
+                shape = torch.tensor(shape) + (self.num_aug - 1) * torch.tensor(shape) * torch.tensor([0,1,0,0,0])
+                out = torch.zeros(list(shape), dtype=torch.float32)
+
 
         if self.mode == 'min':
             out = np.minimum(out, vout)
@@ -200,6 +209,8 @@ class TestAugmentor(object):
             out = np.maximum(out, vout)
         elif self.mode == 'mean':
             out += vout
+        elif self.mode == 'concate':
+            out[:, index*vout.shape[1]: index*vout.shape[1]+vout.shape[1], :, :, :] += vout
 
         return out
 

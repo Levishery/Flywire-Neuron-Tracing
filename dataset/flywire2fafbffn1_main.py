@@ -224,7 +224,7 @@ def mapping_segments(skel, vol_ffn1):
     segment_index_dict = {}
     skel.nodes['seg_id'] = np.zeros(skel.nodes['x'].shape)
     # save node_id because the index will change if reroot.
-    for node in range(skel.n_nodes):
+    for node in tqdm(range(skel.n_nodes)):
         seg_id = vol_ffn1[skel.nodes['x'][node] / 4, skel.nodes['y'][node] / 4, skel.nodes['z'][node]].item()
         skel.nodes['seg_id'][node] = seg_id
         if seg_id in segment_node_dict:
@@ -314,10 +314,10 @@ def get_connector(skel):
 
 if __name__ == "__main__":
     # 可以改进的：1. soma 2. filter thresh
-    create_logger(name='l1', file='/braindat/lab/liusl/flywire/log/flywire2fafbffn_debug3.log', sub_print=True, file_level='DEBUG')
-    target_tree_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/tree_data'
-    target_connector_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/connector_data'
-    visualization_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/visualization'
+    create_logger(name='l1', file='/braindat/lab/liusl/flywire/log/flywire2fafbffn_test.log', sub_print=True, file_level='DEBUG')
+    target_tree_path = '/braindat/lab/liusl/flywire/test-skel/tree_data'
+    target_connector_path = '/braindat/lab/liusl/flywire/test-skel/connector_data'
+    visualization_path = '/braindat/lab/liusl/flywire/test-skel/visualization'
 
     vol_ffn1 = CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0', cache=True, parallel=True)  #
     vol_ffn1.parallel = 8
@@ -326,7 +326,7 @@ if __name__ == "__main__":
     vol_ffn1.skeleton.meta.info['sharding']['hash'] = 'murmurhash3_x86_128'
     vol_ffn1.skeleton = ShardedPrecomputedSkeletonSource(vol_ffn1.skeleton.meta, vol_ffn1.cache, vol_ffn1.config)
 
-    flywire_skel_path = '/braindat/lab/liusl/flywire/gt_skel'
+    flywire_skel_path = '/braindat/lab/liusl/flywire/test-skel/skeletons'
     file_gt_skels = os.listdir(flywire_skel_path)
     random.shuffle(file_gt_skels)
     # get k neurons per iter

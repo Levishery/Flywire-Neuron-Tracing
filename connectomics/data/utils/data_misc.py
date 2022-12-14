@@ -2,6 +2,7 @@ from __future__ import print_function, division
 from typing import Optional, Tuple, List, Union
 import numpy as np
 from connectomics.model.loss import ConnectionLoss
+import torch
 
 
 def get_padsize(pad_size: Union[int, List[int]], ndim: int = 3) -> Tuple[int]:
@@ -102,3 +103,36 @@ def get_connection_distance(pred, target):
     func = ConnectionLoss()
     dist_pos, dist_neg, classification = func(pred, target[0], get_distance=True)
     return dist_pos, dist_neg, classification
+
+def get_connection_ranking(pred, ffn_label, seg_start, candidates):
+    batch_size = pred.shape[0]
+    for b in range(batch_size):
+        pred_b = pred[b]
+        ffn_label_b = ffn_label[b]
+        seg_start_b = seg_start[b]
+        print('ranking for segment ', seg_start_b)
+        candidates_b = candidates[b]
+        mask_seg_start = ffn_label_b==seg_start_b
+        seg_start_embedding = pred_b[:, mask_seg_start]
+        seg_start_mean_embedding = torch.mean(seg_start_embedding, dim=1)
+        distance_dict = {}
+        for candidate in candidates_b:
+            if candidate != seg_start_b:
+                mask = ffn_label_b==candidate
+                condidate_embedding = pred_b[:, mask]
+                condidate_mean_embedding = torch.mean(condidate_embedding, dim=1)
+                distance = torch.norm(condidate_mean_embedding - seg_start_mean_embedding)
+                distance_dict[candidate] = torch.norm(condidate_mean_embedding - seg_start_mean_embedding)
+                # print(distance_dict[candidate])
+                # print(candidate)
+                # if seg_start_b == 9835396981 and distance < 2.2:
+                #     print('connection to seg_start: ', candidate)
+                # if distance < 2.2 and candidate == 9835396981:
+                #     print('can be connected to seg_start: ', seg_start_b)
+                # if seg_start_b == 8792571643 and distance < 2.2:
+                #     print('connection to seg_start: ', candidate)
+                # if distance < 2.2 and candidate == 8792571643:
+                #     print('can be connected to seg_start: ', seg_start_b)
+        distance_dict = {k: v for k, v in sorted(distance_dict.items(), key=lambda item: item[1])}
+        # if seg_start_b == 9835396981 or seg_start_b == 8792571643:
+        print('distance_dict: ', distance_dict)

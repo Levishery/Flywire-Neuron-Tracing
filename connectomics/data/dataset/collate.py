@@ -66,9 +66,12 @@ class TrainBatch:
 
 class TestBatch:
     def __init__(self, batch):
-        pos, out_input = zip(*batch)
+        pos, out_volume, ffn_label, seg_start, candidates = zip(*batch)
         self.pos = pos
-        self.out_input = torch.from_numpy(np.stack(out_input, 0))
+        self.out_input = torch.from_numpy(np.stack(out_volume, 0))
+        self.ffn_label = ffn_label
+        self.seg_start = seg_start
+        self.candidates = candidates
 
     # custom memory pinning method on custom type
     def pin_memory(self):

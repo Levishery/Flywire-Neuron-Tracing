@@ -337,6 +337,7 @@ def seg_to_targets(label_orig: np.ndarray,
         elif topt[0] == 'e':  # embedding
             if segment_info is not None:
                 tmp = [None] * 3
+                label = erode_label(label, tid, erosion_rates)
                 tmp[0] = np.expand_dims(label.astype(np.int64), axis=0)
                 tmp[1] = np.expand_dims(mask_irrelevant_id(label, segment_info['seg_target_relabeled']).astype(np.int64), axis=0)
                 tmp[2] = np.expand_dims(mask_irrelevant_id(label, segment_info['seg_negative']), axis=0)

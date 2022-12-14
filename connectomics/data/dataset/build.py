@@ -195,7 +195,13 @@ def get_dataset(cfg,
     model_input_size = cfg.MODEL.INPUT_SIZE
     topt, wopt = ['0'], [['0']]
     if mode == 'train':
-        sample_volume_size = augmentor.sample_size if augmentor is not None else cfg.MODEL.INPUT_SIZE
+        if augmentor is not None:
+            if isinstance(augmentor, dict):
+                sample_volume_size = augmentor['augmentor_before'].sample_size
+            else:
+                sample_volume_size = augmentor.sample_size
+        else:
+            sample_volume_size = cfg.MODEL.INPUT_SIZE
         sample_label_size = sample_volume_size
         sample_stride = (1, 1, 1)
         topt, wopt = cfg.MODEL.TARGET_OPT, cfg.MODEL.WEIGHT_OPT

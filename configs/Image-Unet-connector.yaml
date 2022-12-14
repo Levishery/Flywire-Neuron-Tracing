@@ -1,7 +1,7 @@
 # learn dense 3d image embedding with V-net
 MODEL:
-  INPUT_SIZE: [ 32, 160, 160 ]
-  OUTPUT_SIZE: [ 32, 160, 160 ]
+  INPUT_SIZE: [ 31, 161, 161 ]
+  OUTPUT_SIZE: [ 31, 161, 161 ]
   ARCHITECTURE: unet_3d
   BLOCK_TYPE: residual_se
   FILTERS: [32, 64, 96, 128, 160]

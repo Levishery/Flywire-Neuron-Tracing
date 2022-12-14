@@ -2,10 +2,10 @@ import sys
 import os
 sys.path.append(os.path.dirname('/code/connectomics/'))
 import argparse
-from cilog import create_logger
 import random
 import numpy as np
 import torch
+from cilog import create_logger
 torch.multiprocessing.set_start_method('spawn', force=True)
 import torch.distributed as dist
 import torch.backends.cudnn as cudnn
@@ -96,7 +96,7 @@ def main():
 
     # Start training or inference:
     if cfg.DATASET.DO_CHUNK_TITLE == 0 and not cfg.DATASET.DO_MULTI_VOLUME:
-        test_func = trainer.test_singly if cfg.INFERENCE.DO_SINGLY else trainer.test
+        test_func = trainer.test_one_neuron if cfg.INFERENCE.DO_SINGLY else trainer.test
         test_func() if args.inference else trainer.train()
     elif cfg.DATASET.DO_MULTI_VOLUME:
         trainer.run_multivolume(mode, rank=args.local_rank)

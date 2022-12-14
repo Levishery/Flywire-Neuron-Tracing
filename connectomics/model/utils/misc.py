@@ -86,7 +86,7 @@ class SplitActivation(object):
         '8': 10,
         'a': -1,
         'r': 1,
-        'e': 16
+        'e': 24
     }
 
     def __init__(self,

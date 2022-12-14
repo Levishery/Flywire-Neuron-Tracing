@@ -97,9 +97,9 @@ class Compose(object):
                 if idx != 0:
                     binary = (temp==idx).astype(np.uint8)
                     for _ in range(2):
-                        binary = cv2.GaussianBlur(binary, ksize=(9, 9), sigmaX=self.smooth_sigma,
-                                                  sigmaY=self.smooth_sigma)
-                        #binary = gaussian(binary, sigma=self.smooth_sigma, preserve_range=True)
+                        # binary = cv2.GaussianBlur(binary, ksize=(9, 9), sigmaX=self.smooth_sigma,
+                        #                           sigmaY=self.smooth_sigma)
+                        binary = gaussian(binary, sigma=self.smooth_sigma, preserve_range=True)
                         binary = (binary > self.smooth_threshold).astype(np.uint8)
 
                     temp[np.where(temp==idx)]=0

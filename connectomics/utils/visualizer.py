@@ -179,7 +179,7 @@ class Visualizer(object):
         shape = x_emb.shape  # b,e,d,h,w
         pca = PCA(n_components=3)
         x_emb = np.transpose(x_emb, [0, 2, 3, 4, 1])  # b,d,h,w,e
-        x_emb = x_emb.reshape(-1, 16)  # b*d*h*w,e
+        x_emb = x_emb.reshape(-1, 24)  # b*d*h*w,e
         new_emb = pca.fit_transform(x_emb)  # b*d*h*w,3
         new_emb = new_emb.reshape(shape[0], shape[2], shape[3], shape[4], 3)  # b,d,h,w,3
         new_emb = np.transpose(new_emb, [0, 4, 1, 2, 3])

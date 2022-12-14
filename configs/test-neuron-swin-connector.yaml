@@ -1,0 +1,31 @@
+MODEL:
+  INPUT_SIZE: [16, 128, 128]
+  OUTPUT_SIZE: [16, 128, 128]
+  ARCHITECTURE: swin_unetr
+  ISOTROPY: [True, False, True, True, True]
+  POOLING_LAYER: True  # used in unet
+  OUT_PLANES: 24  # embedding dim should also be changed in model.utils.misc and visualizer
+  TARGET_OPT: ["e"]
+  LOSS_OPTION:
+    [[ "DiscriminativeLoss", "ConnectionLoss" ]]
+  LOSS_WEIGHT: [[ 1.0, 0.1 ]]
+  WEIGHT_OPT: [[ "0", "0" ]]
+  OUTPUT_ACT: [[ "none",  "none" ]]
+  MIXED_PRECESION: True
+MONITOR:
+  ITERATION_NUM: [20, 200]
+DATASET:
+  DO_MULTI_VOLUME: False
+  CONNECTOR_DATSET: True
+  INPUT_PATH: /braindat/lab/liusl/flywire/test-skel/block_data/720575940630120901
+  IMAGE_NAME:
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test-neuron
+INFERENCE:
+  AUG_MODE: concate
+  INPUT_SIZE: [ 16, 128, 128 ]
+  OUTPUT_SIZE: [ 16, 128, 128 ]
+  DO_SINGLY: True
+  OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
+  OUTPUT_NAME: result.h5
+  OUTPUT_ACT: ["none"]
+  SAMPLES_PER_BATCH: 4 # per gpu

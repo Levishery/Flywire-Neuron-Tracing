@@ -7,7 +7,7 @@ MODEL:
   INPUT_SIZE: [17, 227, 227]
   OUTPUT_SIZE: [17, 227, 227]
   IN_PLANES: 1
-  ISOTROPY: [ False, True, True, True, True ]
+  ISOTROPY: [ False, True, True, True, True]
   OUT_PLANES: 16
   TARGET_OPT: ["e"]
   LOSS_OPTION:
@@ -26,7 +26,7 @@ DATASET:
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True
   DATA_CHUNK_ITER: 800
-  RELABEL: False
+  RELABEL: True
   PAD_SIZE: [4, 64, 64]
 SOLVER:
   LR_SCHEDULER_NAME: "MultiStepLR"
@@ -52,3 +52,6 @@ INFERENCE:
   AUG_NUM: 4
   STRIDE: [18, 32, 32]
   SAMPLES_PER_BATCH: 8 # per gpu
+AUGMENTOR:
+  ADDITIONAL_TARGETS_NAME: [ 'label', 'valid_mask' ]
+  ADDITIONAL_TARGETS_TYPE: [ 'mask', 'mask' ]

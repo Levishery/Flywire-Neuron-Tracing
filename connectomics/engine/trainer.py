@@ -11,16 +11,18 @@ from yacs.config import CfgNode
 import tifffile as tf
 
 import torch
+from cloudvolume import CloudVolume
 # from torch.cuda.amp import autocast, GradScaler
 
 from .solver import *
 from ..model import *
 from ..utils.monitor import build_monitor
+from torch.cuda.amp import autocast, GradScaler
 from ..data.augmentation import build_train_augmentor, TestAugmentor
-from ..data.dataset import build_dataloader, get_dataset
-from ..data.dataset.build import _get_file_list
-from ..data.utils import build_blending_matrix, writeh5, get_connection_distance
-from ..data.utils import get_padsize, array_unpad
+from ..data.dataset import build_dataloader, get_dataset, ConnectorDataset
+from ..data.dataset.build import _get_file_list, _make_path_list
+from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking
+from ..data.utils import get_padsize, array_unpad, readvol
 
 
 class Trainer(object):
@@ -54,8 +56,7 @@ class Trainer(object):
         if self.mode == 'train':
             self.optimizer = build_optimizer(self.cfg, self.model)
             self.lr_scheduler = build_lr_scheduler(self.cfg, self.optimizer)
-            # self.scaler = None
-            self.scaler = None
+            self.scaler = GradScaler() if cfg.MODEL.MIXED_PRECESION else None
             self.start_iter = self.cfg.MODEL.PRE_MODEL_ITER
             self.update_checkpoint(checkpoint)
 
@@ -110,8 +111,10 @@ class Trainer(object):
 
             # prediction
             volume = volume.contiguous().to(self.device, non_blocking=True)
-            pred = self.model(volume)
-            loss, losses_vis = self.criterion(pred, target, weight)
+            with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
+                pred = self.model(volume)
+                loss, losses_vis = self.criterion(pred, target, weight)
+
             self._train_misc(loss, pred, volume, target, weight, iter_total, losses_vis)
 
         self.maybe_save_swa_model()
@@ -178,9 +181,10 @@ class Trainer(object):
 
                 # prediction
                 volume = volume.to(self.device, non_blocking=True)
-                pred = self.model(volume)
-                loss, _ = self.criterion(pred, target, weight)
-                val_loss += loss.data
+                with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
+                    pred = self.model(volume)
+                    loss, _ = self.criterion(pred, target, weight)
+                    val_loss += loss.data
                 if self.cfg.DATASET.CONNECTOR_DATSET:
                     distance_pos, distance_neg, classification = get_connection_distance(pred, target)
                     distance_neg_list.append(distance_neg)
@@ -217,22 +221,6 @@ class Trainer(object):
         r"""Inference function of the trainer class.
         """
         self.model.eval() if self.cfg.INFERENCE.DO_EVAL else self.model.train()
-        output_scale = self.cfg.INFERENCE.OUTPUT_SCALE
-        spatial_size = list(np.ceil(
-            np.array(self.cfg.MODEL.OUTPUT_SIZE) *
-            np.array(output_scale)).astype(int))
-        channel_size = self.cfg.MODEL.OUT_PLANES
-
-        sz = tuple([channel_size] + spatial_size)
-        ww = build_blending_matrix(spatial_size, self.cfg.INFERENCE.BLENDING)
-
-        # when use raw context, the output will loss context of context_size on each side.
-        context_size = (np.array(self.cfg.MODEL.INPUT_SIZE) - np.array(self.cfg.MODEL.OUTPUT_SIZE)) / 2
-        output_size = [tuple(np.ceil((np.array(x) - 2 * context_size) * np.array(output_scale)).astype(int))
-                       for x in self.dataloader._dataset.volume_size]
-        result = [np.stack([np.zeros(x, dtype=np.float32)
-                            for _ in range(channel_size)]) for x in output_size]
-        weight = [np.zeros(x, dtype=np.float32) for x in output_size]
         print("Total number of batches: ", len(self.dataloader))
 
         start = time.perf_counter()
@@ -241,80 +229,42 @@ class Trainer(object):
                 print('progress: %d/%d batches, total time %.2fs' %
                       (i + 1, len(self.dataloader), time.perf_counter() - start))
 
-                pos, volume = sample.pos, sample.out_input
+                pos, volume, ffn_label, seg_start, candidates = sample.pos, sample.out_input, sample.ffn_label, sample.seg_start, sample.candidates
                 volume = volume.to(self.device, non_blocking=True)
                 output = self.augmentor(self.model, volume)
+                ranking = get_connection_ranking(output, ffn_label, seg_start, candidates)
 
                 if torch.cuda.is_available() and i % 50 == 0:
                     GPUtil.showUtilization(all=True)
 
-                for idx in range(output.shape[0]):
-                    st = pos[idx]
-                    st = (np.array(st) *
-                          np.array([1] + output_scale)).astype(int).tolist()
-                    out_block = output[idx]
-                    if result[st[0]].ndim - out_block.ndim == 1:  # 2d model
-                        out_block = out_block[:, np.newaxis, :]
-
-                    result[st[0]][:, st[1]:st[1] + sz[1], st[2]:st[2] + sz[2],
-                    st[3]:st[3] + sz[3]] += out_block * ww[np.newaxis, :]
-                    weight[st[0]][st[1]:st[1] + sz[1], st[2]:st[2] + sz[2],
-                    st[3]:st[3] + sz[3]] += ww
-
         end = time.perf_counter()
         print("Prediction time: %.2fs" % (end - start))
 
-        result_image = result.copy()
-        for vol_id in range(len(result)):
-            if result[vol_id].ndim > weight[vol_id].ndim:
-                weight[vol_id] = np.expand_dims(weight[vol_id], axis=0)
-            result[vol_id] /= weight[vol_id]  # in-place to save memory
-            result_image[vol_id] = result[vol_id] * 255
-            result_image[vol_id] = result_image[vol_id].astype(np.uint8)
-
-            if self.cfg.INFERENCE.UNPAD:
-                pad_size = (np.array(self.cfg.DATASET.PAD_SIZE) *
-                            np.array(output_scale)).astype(int).tolist()
-                if self.cfg.DATASET.DO_CHUNK_TITLE != 0:
-                    # In chunk-based inference using TileDataset, padding is applied
-                    # before resizing, while in normal inference using VolumeDataset,
-                    # padding is after resizing. Thus we adjust pad_size accordingly.
-                    pad_size = (np.array(self.cfg.DATASET.DATA_SCALE) *
-                                np.array(pad_size)).astype(int).tolist()
-                pad_size = get_padsize(pad_size)
-                result[vol_id] = array_unpad(result[vol_id], pad_size)
-
-        if self.output_dir is None:
-            return result
-        else:
-            print('Final prediction shapes are:')
-            for k in range(len(result)):
-                print(result[k].shape)
-            writeh5(os.path.join(self.output_dir, self.test_filename), result,
-                    ['vol%d' % (x) for x in range(len(result))])
-            for vol_id in range(len(result_image)):
-                tf.imsave(os.path.join(self.output_dir, 'vol%d_' % (vol_id) + self.test_filename).replace('h5', 'tif'),
-                          result_image[vol_id])
-            print('Prediction saved as: ', self.test_filename)
-
-    def test_singly(self):
+    def test_one_neuron(self):
         dir_name = _get_file_list(self.cfg.DATASET.INPUT_PATH)
-        img_name = _get_file_list(self.cfg.DATASET.IMAGE_NAME, prefix=dir_name[0])
-        assert len(dir_name) == 1  # avoid ambiguity when DO_SINGLY is True
-
-        # save input image names for further reference
-        fw = open(os.path.join(self.output_dir, "images.txt"), "w")
-        fw.write('\n'.join(img_name))
-        fw.close()
-
-        num_file = len(img_name)
+        block_name =_make_path_list(self.cfg, dir_name, None, self.rank)
+        block_image_path = '/braindat/lab/liusl/flywire/block_data/fafbv14'
+        vol_ffn1 = CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0')
+        num_file = len(block_name)
         start_idx = self.cfg.INFERENCE.DO_SINGLY_START_INDEX
         for i in range(start_idx, num_file):
-            dataset = get_dataset(
-                self.cfg, self.augmentor, self.mode, self.rank,
-                dir_name_init=dir_name, img_name_init=[img_name[i]])
-            self.dataloader = build_dataloader(
-                self.cfg, self.augmentor, self.mode, dataset, self.rank)
+            print('Processing block: ', block_name[i])
+            block_index = block_name[i].split('/')[-1].split('.')[0]
+            block_xyz = block_index.split('_')[1:]
+            img_volume_path = os.path.join(block_image_path, block_index, '*.png')
+            volume = readvol(img_volume_path)
+            volume = [volume[12:70, :, :]]
+            # volume = volume[29:55, 156:-156, 156:-156]
+            cord_start = self.xpblock_to_fafb(int(block_xyz[2]), int(block_xyz[1]), int(block_xyz[0]), 28, 0, 0)
+            cord_end = self.xpblock_to_fafb(int(block_xyz[2]), int(block_xyz[1]), int(block_xyz[0]), 53, 1735, 1735)
+            volume_ffn1 = vol_ffn1[cord_start[0] / 4 - 156:cord_end[0] / 4 + 156 + 1,
+                          cord_start[1] / 4 - 156:cord_end[1] / 4 + 156 + 1, cord_start[2] - 16:cord_end[2] + 16 + 1]
+            # volume_ffn1 = self.vol_ffn1[cord_start[0] / 4:cord_end[0] / 4 + 1,
+            #               cord_start[1] / 4:cord_end[1] / 4 + 1, cord_start[2]:cord_end[2] + 1]
+            volume_ffn1 = np.transpose(volume_ffn1.squeeze(), (2, 0, 1))
+            dataset = ConnectorDataset(connector_path=block_name[i], volume=volume, vol_ffn1=volume_ffn1, mode=self.mode,
+                iter_num=-1, model_input_size=self.cfg.MODEL.INPUT_SIZE, sample_volume_size=self.cfg.MODEL.INPUT_SIZE)
+            self.dataloader = build_dataloader(self.cfg, self.augmentor, self.mode, dataset, self.rank)
             self.dataloader = iter(self.dataloader)
 
             digits = int(math.log10(num_file)) + 1
@@ -324,7 +274,6 @@ class Trainer(object):
                 self.test_filename)
 
             self.test()
-
     # -----------------------------------------------------------------------------
     # Misc functions
     # -----------------------------------------------------------------------------
@@ -399,6 +348,9 @@ class Trainer(object):
             for param_tensor in pretrained_dict:
                 if model_dict[param_tensor].size() == pretrained_dict[param_tensor].size():
                     model_dict[param_tensor] = pretrained_dict[param_tensor]
+                else:
+                    warnings.warn("Parameter size in model.state_dict() do not exactly "
+                                  "match the keys in pretrained_dict!")
             # 3. load the new state dict
             self.model.module.load_state_dict(model_dict)  # nn.DataParallel
 
@@ -526,3 +478,26 @@ class Trainer(object):
             else:
                 print('Multi-volume is for model pretraining.')
             return
+
+    def xpblock_to_fafb(self, z_block, y_block, x_block, z_coo=0, y_coo=0, x_coo=0):
+        '''
+        函数功能:xp集群上的点到fafb原始坐标的转换
+        输入:xp集群点属于的块儿和块内坐标,每个块的大小为1736*1736*26(x,y,z顺序)
+        输出:fafb点坐标
+        z_block:xp集群点做所在块儿的z轴序号
+        y_block:xp集群点做所在块儿的y轴序号
+        x_clock:xp集群点做所在块儿的x轴序号
+        z_coo:xp集群点所在块内的z轴坐标
+        y_coo:xp集群点所在块内的y轴坐标
+        x_coo:xp集群点所在块内的x轴坐标
+
+        '''
+
+        # 第二个：原来的,z准确的,x,y误差超过5,block大小为 26*1736*1736
+        # x_fafb = 1736 * 4 * x_block - 17830 + 4 * x_coo
+        x_fafb = 1736 * 4 * x_block - 17631 + 4 * x_coo
+        # y_fafb = 1736 * 4 * y_block - 19419 + 4 * y_coo
+        y_fafb = 1736 * 4 * y_block - 19211 + 4 * y_coo
+        z_fafb = 26 * z_block + 15 + z_coo
+        # z_fafb = 26 * z_block + 30 + z_coo
+        return (x_fafb, y_fafb, z_fafb)

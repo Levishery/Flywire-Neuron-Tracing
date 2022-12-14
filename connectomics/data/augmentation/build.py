@@ -81,22 +81,22 @@ def build_train_augmentor(cfg: CfgNode, keep_uncropped: bool = False, keep_non_s
                          p=cfg.AUGMENTOR.MISSINGPARTS.P,
                          additional_targets=additional_targets))
 
-    #7. missingsection
-    if cfg.AUGMENTOR.MISSINGSECTION.ENABLED and not cfg.DATASET.DO_2D:
+    if not (cfg.DATASET.CONNECTOR_DATSET and cfg.DATASET.RELABEL):
+        # 7. missingsection, should be done after relabel
+        if cfg.AUGMENTOR.MISSINGSECTION.ENABLED and not cfg.DATASET.DO_2D:
             aug_list.append(
                 MissingSection(
                     num_sections=cfg.AUGMENTOR.MISSINGSECTION.NUM_SECTION,
                     p=cfg.AUGMENTOR.MISSINGSECTION.P,
                     additional_targets=additional_targets))
-
-    #8. misalignment
-    if cfg.AUGMENTOR.MISALIGNMENT.ENABLED and not cfg.DATASET.DO_2D:
-            aug_list.append(
-                MisAlignment(
-                    displacement=cfg.AUGMENTOR.MISALIGNMENT.DISPLACEMENT,
-                    rotate_ratio=cfg.AUGMENTOR.MISALIGNMENT.ROTATE_RATIO,
-                    p=cfg.AUGMENTOR.MISALIGNMENT.P,
-                    additional_targets=additional_targets))
+        #8. misalignment, should be done after relabel
+        if cfg.AUGMENTOR.MISALIGNMENT.ENABLED and not cfg.DATASET.DO_2D:
+                aug_list.append(
+                    MisAlignment(
+                        displacement=cfg.AUGMENTOR.MISALIGNMENT.DISPLACEMENT,
+                        rotate_ratio=cfg.AUGMENTOR.MISALIGNMENT.ROTATE_RATIO,
+                        p=cfg.AUGMENTOR.MISALIGNMENT.P,
+                        additional_targets=additional_targets))
 
     #9. motion-blur
     if cfg.AUGMENTOR.MOTIONBLUR.ENABLED:
@@ -133,12 +133,39 @@ def build_train_augmentor(cfg: CfgNode, keep_uncropped: bool = False, keep_non_s
                      additional_targets=additional_targets))
 
     # compose the list of transforms
-    augmentor = Compose(transforms=aug_list,
-                        input_size=cfg.MODEL.INPUT_SIZE,
-                        smooth=cfg.AUGMENTOR.SMOOTH,
-                        keep_uncropped=keep_uncropped,
-                        keep_non_smoothed=keep_non_smoothed,
-                        additional_targets=additional_targets)
+    if not (cfg.DATASET.CONNECTOR_DATSET and cfg.DATASET.RELABEL):
+        augmentor = Compose(transforms=aug_list,
+                            input_size=cfg.MODEL.INPUT_SIZE,
+                            smooth=cfg.AUGMENTOR.SMOOTH,
+                            keep_uncropped=keep_uncropped,
+                            keep_non_smoothed=keep_non_smoothed,
+                            additional_targets=additional_targets)
+    else:
+        aug_list_after = []
+        if cfg.AUGMENTOR.MISALIGNMENT.ENABLED:
+            aug_list_after.append(MisAlignment(displacement=cfg.AUGMENTOR.MISALIGNMENT.DISPLACEMENT,
+                            rotate_ratio=cfg.AUGMENTOR.MISALIGNMENT.ROTATE_RATIO,
+                            p=cfg.AUGMENTOR.MISALIGNMENT.P,
+                            additional_targets={'label': 'mask'}))
+        if cfg.AUGMENTOR.MISSINGSECTION.ENABLED and not cfg.DATASET.DO_2D:
+            aug_list_after.append(
+                MissingSection(
+                    num_sections=cfg.AUGMENTOR.MISSINGSECTION.NUM_SECTION,
+                    p=cfg.AUGMENTOR.MISSINGSECTION.P,
+                    additional_targets={'label': 'mask'}))
+        augmentor_after = Compose(transforms=aug_list_after,
+                            input_size=cfg.MODEL.INPUT_SIZE,
+                            smooth=cfg.AUGMENTOR.SMOOTH,
+                            keep_uncropped=keep_uncropped,
+                            keep_non_smoothed=keep_non_smoothed,
+                            additional_targets={'label': 'mask'})
+        augmentor_before = Compose(transforms=aug_list,
+                            input_size=augmentor_after.sample_size,
+                            smooth=cfg.AUGMENTOR.SMOOTH,
+                            keep_uncropped=keep_uncropped,
+                            keep_non_smoothed=keep_non_smoothed,
+                            additional_targets=additional_targets)
+        return {'augmentor_before': augmentor_before, 'augmentor_after': augmentor_after}
     # else:
     #     # sample a larger patch without augmentation for augmentations in ssl
     #     sample_size = cfg.MODEL.INPUT_SIZE
@@ -150,6 +177,7 @@ def build_train_augmentor(cfg: CfgNode, keep_uncropped: bool = False, keep_non_s
     #                         keep_uncropped=keep_uncropped,
     #                         keep_non_smoothed=keep_non_smoothed,
     #                         additional_targets=additional_targets)
+
     return augmentor
     # if cfg.AUGMENTOR.USE_COPY_PASTE:
     #     return augmentor, CopyPasteAugmentor(cfg.AUGMENTOR.COPY_PASTE_THRES)
