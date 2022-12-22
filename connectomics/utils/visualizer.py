@@ -5,6 +5,7 @@ from typing import Optional, List, Union, Tuple
 
 import torch
 import torch.nn.functional as F
+from torchvision import transforms
 import torchvision.utils as vutils
 import numpy as np
 from sklearn.decomposition import PCA
@@ -186,6 +187,20 @@ class Visualizer(object):
         new_emb = torch.tensor(new_emb)
         return new_emb
 
+    def plot3d(self, volume, index, pred, target):
+        fig = plt.figure()
+        resize = transforms.Resize([64, 64])
+        ax = fig.gca(projection='3d')
+        voxels = resize(volume[index, 2, :, :, :])
+        colors = np.empty(voxels.shape, dtype=object)
+        colors[resize(volume[index, 0, :, :, :])>0] = 'red'
+        colors[resize(volume[index, 1, :, :, :])>0] = 'blue'
+        ax.voxels(voxels, facecolors=colors)
+        plt.title("pred:%f; target:%f." % (pred.item(), target.item()))
+        plt.savefig('save.png')
+        img = np.asarray(Image.open('save.png'))
+        return img.transpose(2,0,1)
+
     def vol_reshape(self, vol, sz):
         vol = vol.detach().cpu().unsqueeze(1)
         return vol.expand(sz[0], 3, sz[2], sz[3])
@@ -208,3 +223,22 @@ class Visualizer(object):
         plot_distance = image[:, :, :3]
         plot_distance.transpose(2,1,0)
         writer.add_image('%s distance scatter plot' % name, plot_distance, iteration, dataformats='HWC')
+
+    def plot_3dshape(self, writer, pred, target, volume, iteration, name=None, pos_data=None):
+        canvas = []
+        volume_show = volume.detach().cpu()
+        num_show = 4
+        index = 0
+        for i in range(32):
+            if target[0][i] != -1:
+                img = self.plot3d(volume_show, i, pred[i], target[0][i])
+                canvas.append(torch.from_numpy(img))
+                if pos_data is not None:
+                    print(pos_data[i])
+                index = index + 1
+                if index > num_show + 1:
+                    break
+        canvas_merge = torch.cat(canvas, 0)
+        canvas_show = vutils.make_grid(
+            [x.float() for x in canvas], nrow=4, normalize=True, scale_each=True)
+        writer.add_image('%s 3d plot' % name, canvas_show, iteration)

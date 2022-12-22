@@ -9,6 +9,7 @@ import torch.nn.init as init
 import torch.nn.functional as F
 from ..block import *
 
+
 class UNet3D_MALA(nn.Module):
     block_dict = {
         'residual': BasicBlock3d,
@@ -23,7 +24,7 @@ class UNet3D_MALA(nn.Module):
                  if_sigmoid=False,
                  show_feature=False,
                  **kwargs):
-    # def __init__(self, out_channel=3, if_sigmoid=True, init_mode='kaiming', show_feature=False):
+        # def __init__(self, out_channel=3, if_sigmoid=True, init_mode='kaiming', show_feature=False):
         super(UNet3D_MALA, self).__init__()
         self.if_sigmoid = if_sigmoid
         self.init_mode = init_mode
@@ -43,17 +44,20 @@ class UNet3D_MALA(nn.Module):
         self.conv7 = nn.Conv3d(300, 1500, 3, stride=1, padding=0, dilation=1, groups=1, bias=True)
         self.conv8 = nn.Conv3d(1500, 1500, 3, stride=1, padding=0, dilation=1, groups=1, bias=True)
 
-        self.dconv1 = nn.ConvTranspose3d(1500, 1500, (1, 3, 3), stride=(1, 3, 3), padding=0, dilation=1, groups=1500, bias=False)
+        self.dconv1 = nn.ConvTranspose3d(1500, 1500, (1, 3, 3), stride=(1, 3, 3), padding=0, dilation=1, groups=1500,
+                                         bias=False)
         self.conv9 = nn.Conv3d(1500, 300, 1, stride=1, padding=0, dilation=1, groups=1, bias=True)
         self.conv10 = nn.Conv3d(600, 300, 3, stride=1, padding=0, dilation=1, groups=1, bias=True)
         self.conv11 = nn.Conv3d(300, 300, 3, stride=1, padding=0, dilation=1, groups=1, bias=True)
 
-        self.dconv2 = nn.ConvTranspose3d(300, 300, (1, 3, 3), stride=(1, 3, 3), padding=0, dilation=1, groups=300, bias=False)
+        self.dconv2 = nn.ConvTranspose3d(300, 300, (1, 3, 3), stride=(1, 3, 3), padding=0, dilation=1, groups=300,
+                                         bias=False)
         self.conv12 = nn.Conv3d(300, 60, 1, stride=1, padding=0, dilation=1, groups=1, bias=True)
         self.conv13 = nn.Conv3d(120, 60, 3, stride=1, padding=0, dilation=1, groups=1, bias=True)
         self.conv14 = nn.Conv3d(60, 60, 3, stride=1, padding=0, dilation=1, groups=1, bias=True)
 
-        self.dconv3 = nn.ConvTranspose3d(60, 60, (1, 3, 3), stride=(1, 3, 3), padding=0, dilation=1, groups=60, bias=False)
+        self.dconv3 = nn.ConvTranspose3d(60, 60, (1, 3, 3), stride=(1, 3, 3), padding=0, dilation=1, groups=60,
+                                         bias=False)
         self.conv15 = nn.Conv3d(60, 12, 1, stride=1, padding=0, dilation=1, groups=1, bias=True)
         self.conv16 = nn.Conv3d(24, 12, 3, stride=1, padding=0, dilation=1, groups=1, bias=True)
         self.conv17 = nn.Conv3d(12, 12, 3, stride=1, padding=0, dilation=1, groups=1, bias=True)
@@ -81,8 +85,8 @@ class UNet3D_MALA(nn.Module):
         if crop:
             c = (bypass.size()[3] - upsampled.size()[3]) // 2
             cc = (bypass.size()[2] - upsampled.size()[2]) // 2
-            assert(c > 0)
-            assert(cc > 0)
+            assert (c > 0)
+            assert (cc > 0)
             bypass = F.pad(bypass, (-c, -c, -c, -c, -cc, -cc))
         return torch.cat((upsampled, bypass), 1)
 
@@ -135,14 +139,14 @@ class UNet3D_MALA_encoder(nn.Module):
                  init_mode: str = 'kaiming',
                  if_sigmoid=False,
                  show_feature=False,
-                 input_size = [48,268,268],
+                 input_size=[48, 268, 268],
                  **kwargs):
         # def __init__(self, out_channel=3, if_sigmoid=True, init_mode='kaiming', show_feature=False):
         super(UNet3D_MALA_encoder, self).__init__()
         self.if_sigmoid = if_sigmoid
         self.init_mode = init_mode
         self.show_feature = show_feature
-        self.z = input_size[0]-16
+        self.z = input_size[0] - 16
         self.conv1 = nn.Conv3d(1, 12, 3, stride=1, padding=0, dilation=1, groups=1, bias=True)
         self.conv2 = nn.Conv3d(12, 12, 3, stride=1, padding=0, dilation=1, groups=1, bias=True)
         self.pool1 = nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 3, 3))
@@ -217,11 +221,11 @@ class FC3DDiscriminator(nn.Module):
         self.conv0 = nn.Conv3d(num_classes, ndf, kernel_size=4, stride=2, padding=1)
         self.conv1 = nn.Conv3d(n_channel, ndf, kernel_size=4, stride=2, padding=1)
 
-        self.conv2 = nn.Conv3d(ndf, ndf*2, kernel_size=4, stride=2, padding=1)
-        self.conv3 = nn.Conv3d(ndf*2, ndf*4, kernel_size=4, stride=2, padding=1)
-        self.conv4 = nn.Conv3d(ndf*4, ndf*8, kernel_size=4, stride=2, padding=1)
+        self.conv2 = nn.Conv3d(ndf, ndf * 2, kernel_size=4, stride=2, padding=1)
+        self.conv3 = nn.Conv3d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1)
+        self.conv4 = nn.Conv3d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=1)
         self.avgpool = nn.AvgPool3d((7, 7, 5))
-        self.classifier = nn.Linear(ndf*8, 2)
+        self.classifier = nn.Linear(ndf * 8, 2)
 
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         self.dropout = nn.Dropout3d(0.5)
@@ -254,6 +258,8 @@ class FC3DDiscriminator(nn.Module):
         # x = self.Softmax(x)
 
         return x
+
+
 # if __name__ == '__main__':
 # 	""" example of weight sharing """
 # 	#self.convs1_siamese = Conv3x3Stack(1, 12, negative_slope)
@@ -268,47 +274,104 @@ class FC3DDiscriminator(nn.Module):
 # 	out = model(x)
 # 	print(out.shape) # (1, 3, 56, 56, 56)
 
-class EdgeNetwork(nn.Module):
-    def __init__(self, x):
-        super(EdgeNetwork, self).__init__()
+class EdgeNetwork2(nn.Module):
+    def __init__(self, input_size=[16, 72, 72], filters=[16, 32, 64], in_channel=3, **kwargs):
+        super(EdgeNetwork2, self).__init__()
 
-        self.parameters = {
-                'activation': 'LeakyReLU',
-                'filter_sizes': [16, 32, 64],
-                'depth': 3}
-        self.filter_sizes = self.parameters['filter_sizes']
-        self.conv0 = nn.Conv3d(3, self.filter_sizes[0], kernel_size=(3,3,3), stride=(1,1,1))
-        self.conv1 = nn.Conv3d(self.filter_sizes[0], self.filter_sizes[0], kernel_size=(3,3,3), stride=(1,1,1))
+        self.filter_sizes = filters
+        # self.dropout_ratio = [0.2, 0.5]
+        self.dropout_ratio = [0.1, 0.1]
+        self.depth = len(filters)
+
+        self.conv0 = nn.Conv3d(in_channel, self.filter_sizes[0], kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=1)
+        self.conv1 = nn.Conv3d(self.filter_sizes[0], self.filter_sizes[0], kernel_size=(3, 3, 3), stride=(1, 1, 1),
+                               padding=1)
         self.norm0 = nn.BatchNorm3d(self.filter_sizes[0])
-        self.conv2 = nn.Conv3d(self.filter_sizes[0], self.filter_sizes[1], kernel_size=(3, 3, 3), stride=(1, 1, 1))
-        self.conv4 = nn.Conv3d(self.filter_sizes[1], self.filter_sizes[1], kernel_size=(3, 3, 3), stride=(1, 1, 1))
-        self.norm1 = nn.BatchNorm3d(self.filter_sizes[1])
-        self.conv5 = nn.Conv3d(self.filter_sizes[1], self.filter_sizes[2], kernel_size=(3, 3, 3), stride=(1, 1, 1))
-        self.conv6 = nn.Conv3d(self.filter_sizes[2], self.filter_sizes[2], kernel_size=(3, 3, 3), stride=(1, 1, 1))
-        self.norm2 = nn.BatchNorm3d(self.filter_sizes[2])
+        self.norm1 = nn.BatchNorm3d(self.filter_sizes[0])
+        self.norm2 = nn.BatchNorm3d(self.filter_sizes[0])
+
+        self.conv_deep = nn.ModuleList()
+        for i in range(self.depth - 1):
+            self.conv_deep.append(nn.Conv3d(self.filter_sizes[i], self.filter_sizes[1 + i], kernel_size=(3, 3, 3),
+                                            stride=(1, 1, 1), padding=1))
+            self.conv_deep.append(nn.BatchNorm3d(self.filter_sizes[i + 1]))
+            self.conv_deep.append(nn.Conv3d(self.filter_sizes[1 + i], self.filter_sizes[1 + i], kernel_size=(3, 3, 3),
+                                            stride=(1, 1, 1), padding=1))
+            self.conv_deep.append(nn.BatchNorm3d(self.filter_sizes[i + 1]))
+            self.conv_deep.append(nn.BatchNorm3d(self.filter_sizes[i + 1]))
+
         self.PoolingLayer_isotropy = nn.MaxPool3d(kernel_size=(2, 2, 2), stride=(2, 2, 2))
         self.PoolingLayer_anisotropy = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
-        self.dense_layer = nn.Linear(self.filter_sizes[2], 512)
-        self.norm3 = nn.BatchNorm3d(512)
+        self.dense_size = int(input_size[0] * input_size[1] * input_size[1] * self.filter_sizes[-1] / (
+                pow(2, self.depth) * pow(2, self.depth) * pow(2, self.depth - 1)))
+        self.dense_layer = nn.Linear(self.dense_size, 512)
+        self.norm3 = nn.BatchNorm1d(512)
         self.classifier = nn.Linear(512, 1)
 
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.001, inplace=True)
-        self.dropout = nn.Dropout3d(p=0.2)
-        self.dropout_final = nn.Dropout3d(p=0.5)
+        self.dropout = nn.Dropout3d(p=self.dropout_ratio[0])
+        self.dropout_final = nn.Dropout(p=self.dropout_ratio[1])
         self.Sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        batch_size = x.sahpe[0]
+        batch_size = x.shape[0]
         x = self.norm0(self.leaky_relu(self.conv0(x)))
-        x = self.norm0(self.leaky_relu(self.conv1(x)))
-        x = self.dropout(self.norm0(self.PoolingLayer_anisotropy(x)))
-        x = self.norm1(self.leaky_relu(self.conv2(x)))
-        x = self.norm1(self.leaky_relu(self.conv3(x)))
-        x = self.dropout(self.norm1(self.PoolingLayer_anisotropy(x)))
-        x = self.norm2(self.leaky_relu(self.conv4(x)))
-        x = self.norm2(self.leaky_relu(self.conv5(x)))
-        x = self.dropout(self.norm2(self.PoolingLayer_isotropy(x)))
+        x = self.norm1(self.leaky_relu(self.conv1(x)))
+        x = self.dropout(self.norm2(self.PoolingLayer_anisotropy(x)))
+        for i in range(self.depth - 1):
+            x = self.conv_deep[5 * i + 1](self.leaky_relu(self.conv_deep[5 * i](x)))
+            x = self.conv_deep[5 * i + 3](self.leaky_relu(self.conv_deep[5 * i + 2](x)))
+            x = self.dropout(self.conv_deep[5 * i + 4](self.PoolingLayer_isotropy(x)))
         x = x.view(batch_size, -1)
-        x = self.norm3(self.leaky_relu(self.dropout(self.dense_layer(x))))
+        x = self.norm3(self.leaky_relu(self.dropout_final(self.dense_layer(x))))
         x = self.Sigmoid(self.dropout_final(self.classifier(x)))
+        return x
+
+
+class EdgeNetwork(nn.Module):
+    def __init__(self, input_size=[16, 72, 72], filters=[16, 32, 64], in_channel=3, **kwargs):
+        super(EdgeNetwork, self).__init__()
+
+        self.filter_sizes = filters
+        # self.dropout_ratio = [0.2, 0.5]
+        self.dropout_ratio = [0.1, 0.1]
+        self.depth = len(filters)
+
+        self.conv_in0 = conv3d_norm_act(in_channel, self.filter_sizes[0], kernel_size=(3, 3, 3), stride=(1, 1, 1),
+                                        padding=1, norm_mode='bn', act_mode='leaky_relu')
+        self.conv_in1 = conv3d_norm_act(self.filter_sizes[0], self.filter_sizes[0], kernel_size=(3, 3, 3),
+                                        stride=(1, 1, 1),
+                                        padding=1, norm_mode='bn', act_mode='leaky_relu')
+        self.PoolingLayer_anisotropy = nn.Sequential(nn.MaxPool3d(kernel_size=(1, 2, 2),
+                                                                  stride=(1, 2, 2)),
+                                                     nn.BatchNorm3d(self.filter_sizes[0]),
+                                                     nn.Dropout3d(p=self.dropout_ratio[0]))
+
+        self.conv_deep = nn.ModuleList()
+        for i in range(self.depth - 1):
+            layer = nn.Sequential(conv3d_norm_act(self.filter_sizes[i], self.filter_sizes[1 + i], kernel_size=(3, 3, 3),
+                                                  stride=(1, 1, 1), padding=1, norm_mode='bn', act_mode='leaky_relu'),
+                                  conv3d_norm_act(self.filter_sizes[1 + i], self.filter_sizes[1 + i],
+                                                  kernel_size=(3, 3, 3),
+                                                  stride=(1, 1, 1), padding=1, norm_mode='bn', act_mode='leaky_relu'),
+                                  nn.MaxPool3d(kernel_size=(2, 2, 2), stride=(2, 2, 2)),
+                                  nn.BatchNorm3d(self.filter_sizes[1 + i]), nn.Dropout3d(p=self.dropout_ratio[0]))
+            self.conv_deep.append(layer)
+
+        self.dense_size = int(input_size[0] * input_size[1] * input_size[1] * self.filter_sizes[-1] / (
+                pow(2, self.depth) * pow(2, self.depth) * pow(2, self.depth - 1)))
+        self.out_layer = nn.Sequential(nn.Linear(self.dense_size, 512), nn.Dropout(p=self.dropout_ratio[0]),
+                                      nn.LeakyReLU(negative_slope=0.2, inplace=True), nn.BatchNorm1d(512),
+                                      nn.Linear(512, 1), nn.Dropout(p=self.dropout_ratio[1]))
+        self.Sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        x = self.conv_in0(x)
+        x = self.conv_in1(x)
+        x = self.PoolingLayer_anisotropy(x)
+        for layer in self.conv_deep:
+            x = layer(x)
+        x = x.view(batch_size, -1)
+        x = self.Sigmoid(self.out_layer(x))
         return x

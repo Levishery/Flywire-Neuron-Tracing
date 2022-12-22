@@ -37,7 +37,8 @@ class Criterion(object):
         'DiscriminativeLoss': DiscriminativeLoss,
         'ConnectionLoss': ConnectionLoss,
         'WeightedBCEFocalLoss': WeightedBCEFocalLoss,
-        'WSDiceLoss': WSDiceLoss
+        'WSDiceLoss': WSDiceLoss,
+        'classification_MSE': classification_MSE
     }
 
     regu_dict = {
@@ -212,5 +213,5 @@ class Criterion(object):
                    cfg.MODEL.REGU_WEIGHT, do_2d=cfg.DATASET.DO_2D)
 
     def update_weight(self, iteration):
-        weight_tmp = max(1 - 1e-5 * iteration, 1e-5)
+        weight_tmp = min(max(1 - 1e-5 * (iteration-150000), 0.2), 1)
         self.loss_w[0][0] = weight_tmp

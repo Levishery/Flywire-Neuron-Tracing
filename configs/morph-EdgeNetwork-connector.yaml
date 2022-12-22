@@ -1,51 +1,53 @@
+SYSTEM:
+  NUM_GPUS: 1
+  NUM_CPUS: 2
 MODEL:
   INPUT_SIZE: [ 16, 128, 128 ]
-  OUTPUT_SIZE: [ 16, 128, 128 ]
-  ARCHITECTURE: swin_unetr
- # LABEL_EROSION: 1
-  ISOTROPY: [True, False, True, True, True]
+  ARCHITECTURE: EdgeNetwork
   POOLING_LAYER: True  # used in unet
-  OUT_PLANES: 24  # embedding dim should also be changed in model.utils.misc and visualizer
-  TARGET_OPT: ["e"]
+  IN_PLANES: 3
+  FILTERS: [16, 32, 64, 128]
   LOSS_OPTION:
-    [[ "DiscriminativeLoss", "ConnectionLoss" ]]
-  LOSS_WEIGHT: [[ 1.0, 1.0 ]]
-  WEIGHT_OPT: [[ "0", "0" ]]
-  OUTPUT_ACT: [[ "none",  "none" ]]
+    [[ "classification_MSE" ]]
+  LOSS_WEIGHT: [[ 1.0 ]]
+  WEIGHT_OPT: [[ "0" ]]
+  OUTPUT_ACT: [[ "none"]]
+  TARGET_OPT: ["0"]
   MIXED_PRECESION: True
 MONITOR:
   ITERATION_NUM: [20, 200]
 SOLVER:
-  LR_SCHEDULER_NAME: "WarmupMultiStepLR"
+  LR_SCHEDULER_NAME: "MultiStepLR"
   # DECAY_LOSS_WEIGHT: True
   NAME: AdamW
-  BASE_LR: 2e-03
-  WARMUP_FACTOR: 2e-5
-  WARMUP_ITERS: 50000
+  BASE_LR: 5e-03
   STEPS: (250000, 350000)
-  ITERATION_SAVE: 8000
-  ITERATION_TOTAL: 2000000
-  ITERATION_VAL: 4000
-  SAMPLES_PER_BATCH: 4 # PER GPU
+  ITERATION_SAVE: 200
+  ITERATION_TOTAL: 200000
+  ITERATION_VAL: 200
+  SAMPLES_PER_BATCH: 32 # PER GPU
 DATASET:
+  RELABEL: False
+  DATA_CHUNK_ITER: 20
   CONNECTOR_DATSET: True
+  MORPHOLOGY_DATSET: True
   IMAGE_NAME:
   LABEL_NAME:
   VAL_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_vali_filtered
   INPUT_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_train
-  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet-connector-test
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/morph-EdgeNetwork-connector
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True
 INFERENCE:
   OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
   OUTPUT_NAME: result.h5
   OUTPUT_ACT: ["none"]
-  SAMPLES_PER_BATCH: 4 # per gpu
+  SAMPLES_PER_BATCH: 64 # per gpu
 AUGMENTOR:
   SMOOTH: False
   MISSINGPARTS:
     ENABLED: False
-    P: 0.3
+    P: 0.1
   MISSINGSECTION:
     ENABLED: False
     P: 0.3
@@ -64,9 +66,7 @@ AUGMENTOR:
   GRAYSCALE:
     ENABLED: True
   MISALIGNMENT:
-    DISPLACEMENT: 32
     P: 0.3
     ENABLED: False
-    ROTATE_RATIO: 0.0
   MOTIONBLUR:
     ENABLED: False

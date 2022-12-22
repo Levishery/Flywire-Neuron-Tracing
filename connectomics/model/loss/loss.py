@@ -78,6 +78,22 @@ class WeightedMSE(nn.Module):
         return self.weighted_mse_loss(pred, target, weight_mask)
 
 
+class classification_MSE(nn.Module):
+    """classification mean-squared error.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def mse_loss(self, pred, target):
+        valid_mask = target != -1
+        norm_term = torch.sum(valid_mask)
+        return torch.sum(((pred - target)*valid_mask) ** 2) / norm_term
+
+    def forward(self, pred, target, weight_mask=None):
+        return self.mse_loss(pred, target)
+
+
 class WeightedMAE(nn.Module):
     """Mask weighted mean absolute error (MAE) energy function.
     """

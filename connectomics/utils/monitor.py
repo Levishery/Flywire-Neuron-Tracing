@@ -128,6 +128,10 @@ class Monitor(object):
         # for connection evaluation
         self.vis.plot_distance(distance_pos, distance_neg, iteration, self.logger.log_tb, name=name)
 
+    def plot_3d(self, pred, target, volume, iter_total, name=None, pos_data=None):
+        # for connection evaluation
+        self.vis.plot_3dshape(self.logger.log_tb, pred, target, volume, iter_total, name, pos_data)
+
     def load_info(self, cfg: CfgNode, model: nn.Module):
         self._load_config(cfg)
         self._load_model(model)

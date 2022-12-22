@@ -258,51 +258,51 @@ class SwinUNETR(nn.Module):
     def load_from(self, weights):
 
         with torch.no_grad():
-            self.swinViT.patch_embed.proj.weight.copy_(weights["state_dict"]["module.patch_embed.proj.weight"])
-            self.swinViT.patch_embed.proj.bias.copy_(weights["state_dict"]["module.patch_embed.proj.bias"])
+            self.swinViT.patch_embed.proj.weight.copy_(weights["state_dict"]["swinViT.patch_embed.proj.weight"])
+            self.swinViT.patch_embed.proj.bias.copy_(weights["state_dict"]["swinViT.patch_embed.proj.bias"])
             for bname, block in self.swinViT.layers1[0].blocks.named_children():
                 block.load_from(weights, n_block=bname, layer="layers1")
             self.swinViT.layers1[0].downsample.reduction.weight.copy_(
-                weights["state_dict"]["module.layers1.0.downsample.reduction.weight"]
+                weights["state_dict"]["swinViT.layers1.0.downsample.reduction.weight"]
             )
             self.swinViT.layers1[0].downsample.norm.weight.copy_(
-                weights["state_dict"]["module.layers1.0.downsample.norm.weight"]
+                weights["state_dict"]["swinViT.layers1.0.downsample.norm.weight"]
             )
             self.swinViT.layers1[0].downsample.norm.bias.copy_(
-                weights["state_dict"]["module.layers1.0.downsample.norm.bias"]
+                weights["state_dict"]["swinViT.layers1.0.downsample.norm.bias"]
             )
             for bname, block in self.swinViT.layers2[0].blocks.named_children():
                 block.load_from(weights, n_block=bname, layer="layers2")
             self.swinViT.layers2[0].downsample.reduction.weight.copy_(
-                weights["state_dict"]["module.layers2.0.downsample.reduction.weight"]
+                weights["state_dict"]["swinViT.layers2.0.downsample.reduction.weight"]
             )
             self.swinViT.layers2[0].downsample.norm.weight.copy_(
-                weights["state_dict"]["module.layers2.0.downsample.norm.weight"]
+                weights["state_dict"]["swinViT.layers2.0.downsample.norm.weight"]
             )
             self.swinViT.layers2[0].downsample.norm.bias.copy_(
-                weights["state_dict"]["module.layers2.0.downsample.norm.bias"]
+                weights["state_dict"]["swinViT.layers2.0.downsample.norm.bias"]
             )
             for bname, block in self.swinViT.layers3[0].blocks.named_children():
                 block.load_from(weights, n_block=bname, layer="layers3")
             self.swinViT.layers3[0].downsample.reduction.weight.copy_(
-                weights["state_dict"]["module.layers3.0.downsample.reduction.weight"]
+                weights["state_dict"]["swinViT.layers3.0.downsample.reduction.weight"]
             )
             self.swinViT.layers3[0].downsample.norm.weight.copy_(
-                weights["state_dict"]["module.layers3.0.downsample.norm.weight"]
+                weights["state_dict"]["swinViT.layers3.0.downsample.norm.weight"]
             )
             self.swinViT.layers3[0].downsample.norm.bias.copy_(
-                weights["state_dict"]["module.layers3.0.downsample.norm.bias"]
+                weights["state_dict"]["swinViT.layers3.0.downsample.norm.bias"]
             )
             for bname, block in self.swinViT.layers4[0].blocks.named_children():
                 block.load_from(weights, n_block=bname, layer="layers4")
             self.swinViT.layers4[0].downsample.reduction.weight.copy_(
-                weights["state_dict"]["module.layers4.0.downsample.reduction.weight"]
+                weights["state_dict"]["swinViT.layers4.0.downsample.reduction.weight"]
             )
             self.swinViT.layers4[0].downsample.norm.weight.copy_(
-                weights["state_dict"]["module.layers4.0.downsample.norm.weight"]
+                weights["state_dict"]["swinViT.layers4.0.downsample.norm.weight"]
             )
             self.swinViT.layers4[0].downsample.norm.bias.copy_(
-                weights["state_dict"]["module.layers4.0.downsample.norm.bias"]
+                weights["state_dict"]["swinViT.layers4.0.downsample.norm.bias"]
             )
 
     def forward(self, x_in):
@@ -641,7 +641,7 @@ class SwinTransformerBlock(nn.Module):
         return self.drop_path(self.mlp(self.norm2(x)))
 
     def load_from(self, weights, n_block, layer):
-        root = f"module.{layer}.0.blocks.{n_block}."
+        root = f"swinViT.{layer}.0.blocks.{n_block}."
         block_names = [
             "norm1.weight",
             "norm1.bias",
@@ -653,10 +653,10 @@ class SwinTransformerBlock(nn.Module):
             "attn.proj.bias",
             "norm2.weight",
             "norm2.bias",
-            "mlp.fc1.weight",
-            "mlp.fc1.bias",
-            "mlp.fc2.weight",
-            "mlp.fc2.bias",
+            "mlp.linear1.weight",
+            "mlp.linear1.bias",
+            "mlp.linear2.weight",
+            "mlp.linear2.bias",
         ]
         with torch.no_grad():
             self.norm1.weight.copy_(weights["state_dict"][root + block_names[0]])

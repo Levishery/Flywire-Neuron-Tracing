@@ -17,7 +17,7 @@ class MisAlignment(DataAugment):
         additional_targets(dict, optional): additional targets to augment. Default: None
     """
     def __init__(self, 
-                 displacement: int = 16, 
+                 displacement: int = 16,
                  rotate_ratio: float = 0.0,
                  p: float = 0.5,
                  additional_targets: Optional[dict] = None):
@@ -91,7 +91,8 @@ class MisAlignment(DataAugment):
         assert height == width
         M = self.random_rotate_matrix(height, random_state)
         idx = random_state.choice(np.array(range(1, images.shape[0]-1)), 1)[0]
-        mode = 'slip' if random_state.rand() < 0.5 else 'translation'
+        # mode = 'slip' if random_state.rand() < 0.5 else 'translation'
+        mode = 'translation'
 
         sample['image'] = self._apply_misalign_rot(images, idx, M, 
             height, width, target_type='img', mode=mode)

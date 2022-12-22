@@ -11,6 +11,7 @@ from yacs.config import CfgNode
 import tifffile as tf
 
 import torch
+import torchvision.transforms as transforms
 from cloudvolume import CloudVolume
 # from torch.cuda.amp import autocast, GradScaler
 
@@ -106,7 +107,10 @@ class Trainer(object):
             # load data
             sample = next(self.dataloader)
             volume = sample.out_input
+            if self.cfg.DATASET.MORPHOLOGY_DATSET:
+                volume = self.get_morph_input(volume)
             target, weight = sample.out_target_l, sample.out_weight_l
+
             self.data_time = time.perf_counter() - self.start_time
 
             # prediction
@@ -119,7 +123,6 @@ class Trainer(object):
 
         self.maybe_save_swa_model()
 
-
     def _train_misc(self, loss, pred, volume, target, weight,
                     iter_total, losses_vis):
         self.backward_pass(loss)  # backward pass
@@ -129,10 +132,15 @@ class Trainer(object):
             do_vis = self.monitor.update(iter_total, loss, losses_vis,
                                          self.optimizer.param_groups[0]['lr'])
             if do_vis:
-                self.monitor.visualize(
-                    volume, target, pred, weight, iter_total)
-                if torch.cuda.is_available():
-                    GPUtil.showUtilization(all=True)
+                if self.cfg.DATASET.MORPHOLOGY_DATSET:
+                    if torch.cuda.is_available():
+                        GPUtil.showUtilization(all=True)
+                    self.monitor.plot_3d(pred, target, volume, iter_total, name='train')
+                else:
+                    self.monitor.visualize(
+                        volume, target, pred, weight, iter_total)
+                    if torch.cuda.is_available():
+                        GPUtil.showUtilization(all=True)
 
         # Save model
         if (iter_total + 1) % self.cfg.SOLVER.ITERATION_SAVE == 0:
@@ -172,36 +180,56 @@ class Trainer(object):
         self.model.eval()
         with torch.no_grad():
             val_loss = 0.0
+            TP_total = 0
+            FP_total = 0
+            TN_total = 0
+            FN_total = 0
             distance_pos_list = []
             distance_neg_list = []
             classification_list = []
             for i, sample in enumerate(self.val_loader):
                 volume = sample.out_input
                 target, weight = sample.out_target_l, sample.out_weight_l
-
+                if self.cfg.DATASET.MORPHOLOGY_DATSET:
+                    volume = self.get_morph_input(volume)
                 # prediction
-                volume = volume.to(self.device, non_blocking=True)
+                volume = volume.contiguous().to(self.device, non_blocking=True)
                 with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
                     pred = self.model(volume)
                     loss, _ = self.criterion(pred, target, weight)
                     val_loss += loss.data
-                if self.cfg.DATASET.CONNECTOR_DATSET:
+                if self.cfg.DATASET.CONNECTOR_DATSET and not self.cfg.DATASET.MORPHOLOGY_DATSET:
                     distance_pos, distance_neg, classification = get_connection_distance(pred, target)
                     distance_neg_list.append(distance_neg)
                     distance_pos_list.append(distance_pos)
                     classification_list = classification_list + classification
+                if self.cfg.DATASET.MORPHOLOGY_DATSET:
+                    TP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 1))
+                    TP_total = TP_total + TP
+                    FP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 0))
+                    FP_total = FP_total + FP
+                    FN = sum(torch.logical_and(pred.detach().cpu() < 0.5, target[0] == 1))
+                    FN_total = FN_total + FN
         name = self.dataset_val.volume_sample.split('/')[-1]
-        accuracy = sum(classification_list)/len(classification_list)
-        print('%s accuracy: ' % name, accuracy)
         if hasattr(self, 'monitor'):
             self.monitor.logger.log_tb.add_scalar(
                 '%s_Validation_Loss' % name, val_loss, iter_total)
-            self.monitor.logger.log_tb.add_scalar(
-                '%s_Validation_classifaction' % name, accuracy, iter_total)
-            self.monitor.visualize(volume, target, pred,
+            if not self.cfg.DATASET.MORPHOLOGY_DATSET:
+                self.monitor.visualize(volume, target, pred,
                                    weight, iter_total, suffix='Val')
-            if self.cfg.DATASET.CONNECTOR_DATSET:
+            else:
+                recall = TP_total/(TP_total + FN_total)
+                accuracy = TP_total/(TP_total + FP_total)
+                self.monitor.logger.log_tb.add_scalar(
+                    '%s_Validation_classifaction_recall' % name, recall, iter_total)
+                self.monitor.logger.log_tb.add_scalar(
+                    '%s_Validation_classifaction_accuracy' % name, accuracy, iter_total)
+                self.monitor.plot_3d(pred, target, volume, iter_total, name='val', pos_data=sample.pos)
+            if self.cfg.DATASET.CONNECTOR_DATSET and not self.cfg.DATASET.MORPHOLOGY_DATSET:
                 self.monitor.plot_distance(distance_pos_list, distance_neg_list, iter_total, name=name)
+                accuracy = sum(classification_list) / len(classification_list)
+                self.monitor.logger.log_tb.add_scalar(
+                    '%s_Validation_classifaction' % name, accuracy, iter_total)
 
         if not hasattr(self, 'best_val_loss'):
             self.best_val_loss = val_loss
@@ -242,7 +270,7 @@ class Trainer(object):
 
     def test_one_neuron(self):
         dir_name = _get_file_list(self.cfg.DATASET.INPUT_PATH)
-        block_name =_make_path_list(self.cfg, dir_name, None, self.rank)
+        block_name = _make_path_list(self.cfg, dir_name, None, self.rank)
         block_image_path = '/braindat/lab/liusl/flywire/block_data/fafbv14'
         vol_ffn1 = CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0')
         num_file = len(block_name)
@@ -262,8 +290,10 @@ class Trainer(object):
             # volume_ffn1 = self.vol_ffn1[cord_start[0] / 4:cord_end[0] / 4 + 1,
             #               cord_start[1] / 4:cord_end[1] / 4 + 1, cord_start[2]:cord_end[2] + 1]
             volume_ffn1 = np.transpose(volume_ffn1.squeeze(), (2, 0, 1))
-            dataset = ConnectorDataset(connector_path=block_name[i], volume=volume, vol_ffn1=volume_ffn1, mode=self.mode,
-                iter_num=-1, model_input_size=self.cfg.MODEL.INPUT_SIZE, sample_volume_size=self.cfg.MODEL.INPUT_SIZE)
+            dataset = ConnectorDataset(connector_path=block_name[i], volume=volume, vol_ffn1=volume_ffn1,
+                                       mode=self.mode,
+                                       iter_num=-1, model_input_size=self.cfg.MODEL.INPUT_SIZE,
+                                       sample_volume_size=self.cfg.MODEL.INPUT_SIZE)
             self.dataloader = build_dataloader(self.cfg, self.augmentor, self.mode, dataset, self.rank)
             self.dataloader = iter(self.dataloader)
 
@@ -274,6 +304,7 @@ class Trainer(object):
                 self.test_filename)
 
             self.test()
+
     # -----------------------------------------------------------------------------
     # Misc functions
     # -----------------------------------------------------------------------------
@@ -353,6 +384,7 @@ class Trainer(object):
                                   "match the keys in pretrained_dict!")
             # 3. load the new state dict
             self.model.module.load_state_dict(model_dict)  # nn.DataParallel
+            # self.model.module.load_from(checkpoint)
 
         if self.mode == 'train' and not self.cfg.SOLVER.ITERATION_RESTART:
             if hasattr(self, 'optimizer') and 'optimizer' in checkpoint.keys():
@@ -458,14 +490,14 @@ class Trainer(object):
                                                    dataset=self.dataset.dataset)
                 self.dataloader = iter(self.dataloader)
 
-                print('chunk loading time:', time.time()-self.chunk_time)
+                print('chunk loading time:', time.time() - self.chunk_time)
                 print('rank:', rank)
                 print('start train for chunk %d' % chunk)
                 self.train()
                 print('finished train for chunk %d' % chunk)
                 self.start_iter += self.cfg.DATASET.DATA_CHUNK_ITER
                 del self.dataloader
-                print('chunk time:', time.time()-self.chunk_time)
+                print('chunk time:', time.time() - self.chunk_time)
                 # ITERATION_VAL should be k*DATA_CHUNK_ITER
                 if self.dataset_val is not None and self.start_iter % self.cfg.SOLVER.ITERATION_VAL == 0:
                     self.dataset_val.volume_done = []
@@ -501,3 +533,14 @@ class Trainer(object):
         z_fafb = 26 * z_block + 15 + z_coo
         # z_fafb = 26 * z_block + 30 + z_coo
         return (x_fafb, y_fafb, z_fafb)
+
+    def get_morph_input(self, volume):
+        volume_image = volume[:, 0, :, :, :]
+        volume_morph = volume[:, 1:, :, :, :]
+        if self.cfg.MODEL.IN_PLANES > 3:
+            volume_embedding = volume_image
+            volume_input = torch.cat((volume_embedding, volume_morph), dim=1)
+        else:
+            volume_input = volume_morph
+        return volume_input
+
