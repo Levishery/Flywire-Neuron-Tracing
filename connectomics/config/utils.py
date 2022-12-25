@@ -5,7 +5,7 @@ from yacs.config import CfgNode
 from .defaults import get_cfg_defaults
 
 
-def load_cfg(args: argparse.Namespace):
+def load_cfg(args: argparse.Namespace, merge_cmd=True):
     """Load configurations.
     """
     # Set configurations
@@ -13,7 +13,8 @@ def load_cfg(args: argparse.Namespace):
     if args.config_base is not None:
         cfg.merge_from_file(args.config_base)
     cfg.merge_from_file(args.config_file)
-    cfg.merge_from_list(args.opts)
+    if merge_cmd:
+        cfg.merge_from_list(args.opts)
 
     # Overwrite options given configs with higher priority.
     if args.inference:

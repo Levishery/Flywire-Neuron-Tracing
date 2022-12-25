@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 import torch
 import scipy
 import numpy as np
+from sklearn.decomposition import PCA
 from scipy.ndimage import distance_transform_edt
 from skimage.morphology import remove_small_holes
 from skimage.measure import label as label_cc  # avoid namespace conflict
@@ -14,6 +15,7 @@ __all__ = [
     'edt_semantic',
     'edt_instance',
     'decode_quantize',
+    'pca_emb',
 ]
 
 
@@ -191,3 +193,16 @@ def _decode_quant_numpy(output, mode='max'):
         energy = (pred*bins).reshape(out_shape).sum(0)
 
     return energy
+
+
+def pca_emb(x_emb, dim=24, n_components=3):
+    x_emb = np.array(x_emb.detach().cpu())
+    shape = x_emb.shape  # b,e,d,h,w
+    pca = PCA(n_components=n_components)
+    x_emb = np.transpose(x_emb, [0, 2, 3, 4, 1])  # b,d,h,w,e
+    x_emb = x_emb.reshape(-1, dim)  # b*d*h*w,e
+    new_emb = pca.fit_transform(x_emb)  # b*d*h*w,3
+    new_emb = new_emb.reshape(shape[0], shape[2], shape[3], shape[4], n_components)  # b,d,h,w,3
+    new_emb = np.transpose(new_emb, [0, 4, 1, 2, 3])
+    new_emb = torch.tensor(new_emb)
+    return new_emb

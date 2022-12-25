@@ -57,6 +57,15 @@ def main():
     init_seed(manual_seed)
 
     cfg = load_cfg(args)
+    cfg_image_model = None
+    args_image_model = None
+    if cfg.MODEL.IMAGE_MODEL_CFG is not None:
+        args_image_model = get_args()
+        args_image_model.config_file = cfg.MODEL.IMAGE_MODEL_CFG
+        args_image_model.checkpoint = cfg.MODEL.IMAGE_MODEL_CKPT
+        assert args_image_model.checkpoint is not None
+        args_image_model.inference = True
+        cfg_image_model = load_cfg(args_image_model, merge_cmd=False)
     log_name = cfg.DATASET.OUTPUT_PATH + '.log'
     create_logger(name='l1', file=log_name, sub_print=True,
                   file_level='DEBUG')
@@ -88,7 +97,8 @@ def main():
     if cfg.MODEL.SSL == 'none':
         trainer = Trainer(cfg, device, mode,
                           rank=args.local_rank,
-                          checkpoint=args.checkpoint)
+                          checkpoint=args.checkpoint, cfg_image_model=cfg_image_model,
+                          checkpoint_image_model=args_image_model.checkpoint if args_image_model is not None else None)
     else:
         trainer = SSL_Trainer(cfg, device, mode,
                               rank=args.local_rank,

@@ -5,7 +5,7 @@ MODEL:
  # LABEL_EROSION: 1
   ISOTROPY: [True, False, True, True, True]
   POOLING_LAYER: True  # used in unet
-  OUT_PLANES: 24  # embedding dim should also be changed in model.utils.misc and visualizer
+  OUT_PLANES: 16  # embedding dim should also be changed in model.utils.misc and visualizer
   TARGET_OPT: ["e"]
   LOSS_OPTION:
     [[ "DiscriminativeLoss", "ConnectionLoss" ]]

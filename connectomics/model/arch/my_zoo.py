@@ -274,9 +274,9 @@ class FC3DDiscriminator(nn.Module):
 # 	out = model(x)
 # 	print(out.shape) # (1, 3, 56, 56, 56)
 
-class EdgeNetwork2(nn.Module):
+class EdgeNetwork(nn.Module):
     def __init__(self, input_size=[16, 72, 72], filters=[16, 32, 64], in_channel=3, **kwargs):
-        super(EdgeNetwork2, self).__init__()
+        super(EdgeNetwork, self).__init__()
 
         self.filter_sizes = filters
         # self.dropout_ratio = [0.2, 0.5]
@@ -328,9 +328,9 @@ class EdgeNetwork2(nn.Module):
         return x
 
 
-class EdgeNetwork(nn.Module):
+class EdgeNetwork2(nn.Module):
     def __init__(self, input_size=[16, 72, 72], filters=[16, 32, 64], in_channel=3, **kwargs):
-        super(EdgeNetwork, self).__init__()
+        super(EdgeNetwork2, self).__init__()
 
         self.filter_sizes = filters
         # self.dropout_ratio = [0.2, 0.5]

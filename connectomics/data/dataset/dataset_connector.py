@@ -289,7 +289,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
         if morphology:
             seg_0 = seg_target_relabeled[0]
             seg_0_morph = np.expand_dims(np.array(out_label == seg_0), 0)
-            if random.random() > 0.5:
+            if random.random() > 0.7:
                 seg_1 = seg_target_relabeled[1]
                 is_positive_sample = 1
             else:

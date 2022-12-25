@@ -8,6 +8,7 @@ import math
 import GPUtil
 import numpy as np
 from yacs.config import CfgNode
+import einops
 import tifffile as tf
 
 import torch
@@ -22,7 +23,7 @@ from torch.cuda.amp import autocast, GradScaler
 from ..data.augmentation import build_train_augmentor, TestAugmentor
 from ..data.dataset import build_dataloader, get_dataset, ConnectorDataset
 from ..data.dataset.build import _get_file_list, _make_path_list
-from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking
+from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking, pca_emb
 from ..data.utils import get_padsize, array_unpad, readvol
 
 
@@ -42,7 +43,9 @@ class Trainer(object):
                  device: torch.device,
                  mode: str = 'train',
                  rank: Optional[int] = None,
-                 checkpoint: Optional[str] = None):
+                 checkpoint: Optional[str] = None,
+                 cfg_image_model: CfgNode = None,
+                 checkpoint_image_model: Optional[str] = None,):
 
         assert mode in ['train', 'test']
         self.cfg = cfg
@@ -93,6 +96,12 @@ class Trainer(object):
             if self.mode == 'train' and cfg.DATASET.VAL_IMAGE_NAME is not None:
                 self.val_loader = build_dataloader(
                     self.cfg, None, mode='val', rank=rank)
+        if self.cfg.DATASET.MORPHOLOGY_DATSET and self.cfg.MODEL.IN_PLANES > 3:
+            assert cfg_image_model is not None
+            self.cfg_image_model = cfg_image_model
+            self.image_model = build_model(cfg_image_model, self.device, rank)
+            self.update_checkpoint(checkpoint_image_model, is_image_model=True)
+            self.image_model.eval()
 
     def train(self):
         r"""Training function of the trainer class.
@@ -346,12 +355,15 @@ class Trainer(object):
             filename = os.path.join(self.output_dir, filename)
             torch.save(state, filename)
 
-    def update_checkpoint(self, checkpoint: Optional[str] = None):
+    def update_checkpoint(self, checkpoint: Optional[str] = None, is_image_model = False):
         r"""Update the model with the specified checkpoint file path.
         """
         if checkpoint is None:
             return
-
+        if is_image_model:
+            model = self.image_model
+        else:
+            model = self.model
         # load pre-trained model
         print('Load pretrained checkpoint: ', checkpoint)
         checkpoint = torch.load(checkpoint, map_location='cpu')
@@ -362,7 +374,7 @@ class Trainer(object):
             pretrained_dict = checkpoint['state_dict']
             pretrained_dict = update_state_dict(
                 self.cfg, pretrained_dict, mode=self.mode)
-            model_dict = self.model.module.state_dict()  # nn.DataParallel
+            model_dict = model.module.state_dict()  # nn.DataParallel
 
             # show model keys that do not match pretrained_dict
             if not model_dict.keys() == pretrained_dict.keys():
@@ -383,10 +395,10 @@ class Trainer(object):
                     warnings.warn("Parameter size in model.state_dict() do not exactly "
                                   "match the keys in pretrained_dict!")
             # 3. load the new state dict
-            self.model.module.load_state_dict(model_dict)  # nn.DataParallel
+            model.module.load_state_dict(model_dict)  # nn.DataParallel
             # self.model.module.load_from(checkpoint)
 
-        if self.mode == 'train' and not self.cfg.SOLVER.ITERATION_RESTART:
+        if self.mode == 'train' and not self.cfg.SOLVER.ITERATION_RESTART and not is_image_model:
             if hasattr(self, 'optimizer') and 'optimizer' in checkpoint.keys():
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
 
@@ -538,8 +550,30 @@ class Trainer(object):
         volume_image = volume[:, 0, :, :, :]
         volume_morph = volume[:, 1:, :, :, :]
         if self.cfg.MODEL.IN_PLANES > 3:
-            volume_embedding = volume_image
-            volume_input = torch.cat((volume_embedding, volume_morph), dim=1)
+            if self.cfg.MODEL.MASK_EMBED:
+                morph_dim = 2
+            else:
+                morph_dim = 3
+            embed_dim = self.cfg.MODEL.IN_PLANES - morph_dim
+            with torch.no_grad():
+                image_batch_size = self.cfg_image_model.SOLVER.SAMPLES_PER_BATCH
+                num_batch = int(np.ceil(volume_image.shape[0]/image_batch_size))
+                volume_embedding_list = []
+                for i in range(num_batch):
+                    input_image = volume_image[i*image_batch_size:(i+1)*image_batch_size].to(self.device, non_blocking=True)
+                    input_image = input_image.unsqueeze(dim=1)
+                    volume_embedding = self.image_model(input_image)
+                    volume_embedding_list.append(volume_embedding)
+                volume_embedding = torch.cat(volume_embedding_list, dim=0)
+                if embed_dim < volume_embedding.shape[1]:
+                    volume_embedding = pca_emb(volume_embedding, dim=volume_embedding.shape[1],
+                                           n_components=embed_dim).to(self.device, non_blocking=True)
+                if self.cfg.MODEL.MASK_EMBED:
+                    mask = einops.repeat(volume_morph[:, -1, :, :, :], 'b d h w -> b k d h w', k=embed_dim).to(self.device, non_blocking=True)
+                    volume_embedding = mask * volume_embedding
+                    volume_input = torch.cat((volume_morph[:, 0:2, :,:,:].to(self.device, non_blocking=True), volume_embedding), dim=1)
+                else:
+                    volume_input = torch.cat((volume_morph.to(self.device, non_blocking=True), volume_embedding), dim=1)
         else:
             volume_input = volume_morph
         return volume_input

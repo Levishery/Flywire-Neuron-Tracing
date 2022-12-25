@@ -5,7 +5,7 @@ MODEL:
   INPUT_SIZE: [ 16, 128, 128 ]
   ARCHITECTURE: EdgeNetwork
   POOLING_LAYER: True  # used in unet
-  IN_PLANES: 3
+  IN_PLANES: 6
   FILTERS: [16, 32, 64, 128]
   LOSS_OPTION:
     [[ "classification_MSE" ]]
@@ -14,6 +14,9 @@ MODEL:
   OUTPUT_ACT: [[ "none"]]
   TARGET_OPT: ["0"]
   MIXED_PRECESION: True
+  MASK_EMBED: False
+  IMAGE_MODEL_CFG: configs/test-neuron-swin-connector.yaml
+  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/image-swin-isoem-wu-1cl/checkpoint_best.pth
 MONITOR:
   ITERATION_NUM: [20, 200]
 SOLVER:
@@ -35,7 +38,7 @@ DATASET:
   LABEL_NAME:
   VAL_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_vali_filtered
   INPUT_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_train
-  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/morph-EdgeNetwork-connector
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/morph-EmbedEdgeNetwork-connector
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True
 INFERENCE:

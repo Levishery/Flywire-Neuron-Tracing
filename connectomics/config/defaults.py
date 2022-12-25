@@ -109,6 +109,10 @@ _C.MODEL.PRE_MODEL_LAYER = ''
 
 _C.MODEL.PRE_MODEL_ITER = 0
 
+_C.MODEL.IMAGE_MODEL_CFG = None
+_C.MODEL.IMAGE_MODEL_CKPT = None
+_C.MODEL.MASK_EMBED = False
+
 # Predict an auxiliary output (only works with 2D DeeplabV3)
 _C.MODEL.AUX_OUT = False
 

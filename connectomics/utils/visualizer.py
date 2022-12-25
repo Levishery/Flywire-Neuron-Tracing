@@ -180,7 +180,7 @@ class Visualizer(object):
         shape = x_emb.shape  # b,e,d,h,w
         pca = PCA(n_components=3)
         x_emb = np.transpose(x_emb, [0, 2, 3, 4, 1])  # b,d,h,w,e
-        x_emb = x_emb.reshape(-1, 24)  # b*d*h*w,e
+        x_emb = x_emb.reshape(-1, 16)  # b*d*h*w,e
         new_emb = pca.fit_transform(x_emb)  # b*d*h*w,3
         new_emb = new_emb.reshape(shape[0], shape[2], shape[3], shape[4], 3)  # b,d,h,w,3
         new_emb = np.transpose(new_emb, [0, 4, 1, 2, 3])
@@ -191,15 +191,22 @@ class Visualizer(object):
         fig = plt.figure()
         resize = transforms.Resize([64, 64])
         ax = fig.gca(projection='3d')
-        voxels = resize(volume[index, 2, :, :, :])
+        voxels = resize(volume[index, 2, :, :, :] != 0)
         colors = np.empty(voxels.shape, dtype=object)
         colors[resize(volume[index, 0, :, :, :])>0] = 'red'
         colors[resize(volume[index, 1, :, :, :])>0] = 'blue'
         ax.voxels(voxels, facecolors=colors)
         plt.title("pred:%f; target:%f." % (pred.item(), target.item()))
-        plt.savefig('save.png')
-        img = np.asarray(Image.open('save.png'))
-        return img.transpose(2,0,1)
+        # from plt to np
+        canvas = FigureCanvasAgg(plt.gcf())
+        canvas.draw()
+        w, h = canvas.get_width_height()
+        buf = np.fromstring(canvas.tostring_argb(), dtype=np.uint8)
+        buf.shape = (w, h, 4)
+        buf = np.roll(buf, 3, axis=2)
+        image = Image.frombytes("RGBA", (w, h), buf.tostring()).resize((300,240))
+        image = np.asarray(image)
+        return image.transpose(2,0,1)
 
     def vol_reshape(self, vol, sz):
         vol = vol.detach().cpu().unsqueeze(1)
@@ -227,7 +234,7 @@ class Visualizer(object):
     def plot_3dshape(self, writer, pred, target, volume, iteration, name=None, pos_data=None):
         canvas = []
         volume_show = volume.detach().cpu()
-        num_show = 4
+        num_show = 8
         index = 0
         for i in range(32):
             if target[0][i] != -1:
