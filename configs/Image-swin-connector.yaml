@@ -41,6 +41,35 @@ INFERENCE:
   OUTPUT_NAME: result.h5
   OUTPUT_ACT: ["none"]
   SAMPLES_PER_BATCH: 4 # per gpu
+#AUGMENTOR:
+#  SMOOTH: False
+#  MISSINGPARTS:
+#    ENABLED: False
+#    P: 0.3
+#  MISSINGSECTION:
+#    ENABLED: True
+#    P: 0.3
+#  CUTNOISE:
+#    ENABLED: False
+#  CUTBLUR:
+#    ENABLED: False
+#  ROTATE:
+#    ENABLED: True
+#  RESCALE:
+#    ENABLED: True
+#  FLIP:
+#    ENABLED: True
+#  ELASTIC:
+#    ENABLED: False
+#  GRAYSCALE:
+#    ENABLED: True
+#  MISALIGNMENT:
+#    DISPLACEMENT: 32
+#    P: 0.3
+#    ENABLED: True
+#    ROTATE_RATIO: 0.0
+#  MOTIONBLUR:
+#    ENABLED: False
 AUGMENTOR:
   SMOOTH: False
   MISSINGPARTS:

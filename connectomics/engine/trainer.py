@@ -9,6 +9,7 @@ import GPUtil
 import numpy as np
 from yacs.config import CfgNode
 import einops
+import pandas as pd
 import tifffile as tf
 
 import torch
@@ -25,6 +26,9 @@ from ..data.dataset import build_dataloader, get_dataset, ConnectorDataset
 from ..data.dataset.build import _get_file_list, _make_path_list
 from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking, pca_emb
 from ..data.utils import get_padsize, array_unpad, readvol
+
+
+DEBUG = 0
 
 
 class Trainer(object):
@@ -117,15 +121,18 @@ class Trainer(object):
             sample = next(self.dataloader)
             volume = sample.out_input
             if self.cfg.DATASET.MORPHOLOGY_DATSET:
-                volume = self.get_morph_input(volume)
+                volume, embedding = self.get_morph_input(volume)
             target, weight = sample.out_target_l, sample.out_weight_l
 
             self.data_time = time.perf_counter() - self.start_time
 
             # prediction
-            volume = volume.contiguous().to(self.device, non_blocking=True)
             with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
-                pred = self.model(volume)
+                if self.cfg.MODEL.EMBED_REDUCTION is None:
+                    volume = volume.contiguous().to(self.device, non_blocking=True)
+                    pred = self.model(volume)
+                else:
+                    pred = self.model(volume, embedding)
                 loss, losses_vis = self.criterion(pred, target, weight)
 
             self._train_misc(loss, pred, volume, target, weight, iter_total, losses_vis)
@@ -200,11 +207,14 @@ class Trainer(object):
                 volume = sample.out_input
                 target, weight = sample.out_target_l, sample.out_weight_l
                 if self.cfg.DATASET.MORPHOLOGY_DATSET:
-                    volume = self.get_morph_input(volume)
+                    volume, embedding = self.get_morph_input(volume)
                 # prediction
-                volume = volume.contiguous().to(self.device, non_blocking=True)
                 with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
-                    pred = self.model(volume)
+                    if self.cfg.MODEL.EMBED_REDUCTION is None:
+                        volume = volume.contiguous().to(self.device, non_blocking=True)
+                        pred = self.model(volume)
+                    else:
+                        pred = self.model(volume, embedding)
                     loss, _ = self.criterion(pred, target, weight)
                     val_loss += loss.data
                 if self.cfg.DATASET.CONNECTOR_DATSET and not self.cfg.DATASET.MORPHOLOGY_DATSET:
@@ -229,11 +239,17 @@ class Trainer(object):
             else:
                 recall = TP_total/(TP_total + FN_total)
                 accuracy = TP_total/(TP_total + FP_total)
+                if DEBUG:
+                    row = pd.DataFrame([{'block': self.dataset_val.dataset.connector_path.split('/')[-1],
+                                         'connector_num': len(self.dataset_val.dataset), 'recall': recall.item(), 'acc': accuracy.item()}])
+                    row.to_csv('/braindat/lab/liusl/flywire/block_data/v2/morph_performence.csv', mode='a', header=False, index=False)
+                print(recall)
+                print(accuracy)
                 self.monitor.logger.log_tb.add_scalar(
                     '%s_Validation_classifaction_recall' % name, recall, iter_total)
                 self.monitor.logger.log_tb.add_scalar(
                     '%s_Validation_classifaction_accuracy' % name, accuracy, iter_total)
-                self.monitor.plot_3d(pred, target, volume, iter_total, name='val', pos_data=sample.pos)
+                # self.monitor.plot_3d(pred, target, volume, iter_total, name='val', pos_data=sample.pos)
             if self.cfg.DATASET.CONNECTOR_DATSET and not self.cfg.DATASET.MORPHOLOGY_DATSET:
                 self.monitor.plot_distance(distance_pos_list, distance_neg_list, iter_total, name=name)
                 accuracy = sum(classification_list) / len(classification_list)
@@ -243,10 +259,11 @@ class Trainer(object):
         if not hasattr(self, 'best_val_loss'):
             self.best_val_loss = val_loss
 
-        if val_loss < self.best_val_loss:
+        if val_loss < self.best_val_loss and not hasattr(self, 'val_loss_total'):
             self.best_val_loss = val_loss
             self.save_checkpoint(iter_total, is_best=True)
-
+        if hasattr(self, 'val_loss_total'):
+            self.val_loss_total = self.val_loss_total + val_loss
         # Release some GPU memory and ensure same GPU usage in the consecutive iterations according to
         # https://discuss.pytorch.org/t/gpu-memory-consumption-increases-while-training/2770
         del pred, loss, val_loss
@@ -510,15 +527,23 @@ class Trainer(object):
                 self.start_iter += self.cfg.DATASET.DATA_CHUNK_ITER
                 del self.dataloader
                 print('chunk time:', time.time() - self.chunk_time)
-                # ITERATION_VAL should be k*DATA_CHUNK_ITER
-                if self.dataset_val is not None and self.start_iter % self.cfg.SOLVER.ITERATION_VAL == 0:
-                    self.dataset_val.volume_done = []
-                    while len(self.dataset_val.volume_done) < len(self.dataset_val.volume_path):
-                        self.dataset_val.updatechunk()
-                        self.val_loader = build_dataloader(self.cfg, None, mode='val', dataset=self.dataset_val.dataset)
-                        self.val_loader = iter(self.val_loader)
-                        self.validate(self.start_iter)
-                        del self.val_loader
+                # ITERATION_VAL should be k*DATA_CHUNK_ITER, and in main process
+                if self.is_main_process:
+                    if self.dataset_val is not None and self.start_iter % self.cfg.SOLVER.ITERATION_VAL == 0:
+                        self.dataset_val.volume_done = []
+                        self.val_loss_total = 0
+
+                        while len(self.dataset_val.volume_done) < len(self.dataset_val.volume_path):
+                            self.dataset_val.updatechunk()
+                            self.val_loader = build_dataloader(self.cfg, None, mode='val', dataset=self.dataset_val.dataset)
+                            self.val_loader = iter(self.val_loader)
+                            self.validate(self.start_iter)
+                            del self.val_loader
+                        if not hasattr(self, 'best_val_loss_total'):
+                            self.best_val_loss_total = self.val_loss_total
+                        if self.val_loss_total < self.best_val_loss_total:
+                            self.best_val_loss_total = self.val_loss_total
+                            self.save_checkpoint(chunk, is_best=True)
             else:
                 print('Multi-volume is for model pretraining.')
             return
@@ -565,6 +590,8 @@ class Trainer(object):
                     volume_embedding = self.image_model(input_image)
                     volume_embedding_list.append(volume_embedding)
                 volume_embedding = torch.cat(volume_embedding_list, dim=0)
+                if self.cfg.MODEL.EMBED_REDUCTION is not None:
+                    return volume_morph.contiguous().to(self.device, non_blocking=True), volume_embedding
                 if embed_dim < volume_embedding.shape[1]:
                     volume_embedding = pca_emb(volume_embedding, dim=volume_embedding.shape[1],
                                            n_components=embed_dim).to(self.device, non_blocking=True)
@@ -576,5 +603,5 @@ class Trainer(object):
                     volume_input = torch.cat((volume_morph.to(self.device, non_blocking=True), volume_embedding), dim=1)
         else:
             volume_input = volume_morph
-        return volume_input
+        return volume_input, 0
 

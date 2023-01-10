@@ -49,6 +49,10 @@ def build_model(cfg, device, rank=None):
         if cfg.MODEL.BACKBONE == 'botnet':
             kwargs['fmap_size'] = cfg.MODEL.INPUT_SIZE
 
+    if model_arch == 'EdgeNetwork':
+        kwargs['embed_reduction'] = cfg.MODEL.EMBED_REDUCTION
+        kwargs['mask_embed'] = cfg.MODEL.MASK_EMBED
+
     if model_arch[:7] == 'deeplab':
         kwargs['name'] = model_arch
         kwargs['backbone_type'] = cfg.MODEL.BACKBONE

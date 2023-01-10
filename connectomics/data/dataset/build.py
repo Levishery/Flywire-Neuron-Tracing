@@ -19,7 +19,7 @@ from .collate import *
 from ..utils import *
 
 
-def _make_path_list(cfg, dir_name, file_name, rank=None):
+def _make_path_list(cfg, dir_name, file_name, rank=None, mode='train'):
     r"""Concatenate directory path(s) and filenames and return
     the complete file paths.
     """
@@ -48,8 +48,8 @@ def _make_path_list(cfg, dir_name, file_name, rank=None):
                     file_path += sorted(glob.glob(x, recursive=True))
                 else: # complete filename is specified
                     file_path.append(x)
-
-    file_path = _distribute_data(cfg, file_path, rank)
+    if mode != 'val':
+        file_path = _distribute_data(cfg, file_path, rank)
 
     return file_path
 
@@ -119,20 +119,20 @@ def _get_input(cfg,
         img_name = img_name_init
     else:
         img_name = _get_file_list(img_name)
-    img_name = _make_path_list(cfg, dir_name, img_name, rank)
+    img_name = _make_path_list(cfg, dir_name, img_name, rank, mode)
     print(rank, len(img_name), list(map(os.path.basename, img_name)))
 
     label = None
     if mode in ['val', 'train'] and label_name is not None:
         label_name = _get_file_list(label_name)
-        label_name = _make_path_list(cfg, dir_name, label_name, rank)
+        label_name = _make_path_list(cfg, dir_name, label_name, rank, mode)
         assert len(label_name) == len(img_name)
         label = [None]*len(label_name)
 
     valid_mask = None
     if mode in ['val', 'train'] and valid_mask_name is not None:
         valid_mask_name = _get_file_list(valid_mask_name)
-        valid_mask_name = _make_path_list(cfg, dir_name, valid_mask_name, rank)
+        valid_mask_name = _make_path_list(cfg, dir_name, valid_mask_name, rank, mode)
         assert len(valid_mask_name) == len(img_name)
         valid_mask = [None]*len(valid_mask_name)
 
@@ -254,12 +254,12 @@ def get_dataset(cfg,
         if cfg.DATASET.IMAGE_NAME is not None:
             img_name = _get_file_list(cfg.DATASET.IMAGE_NAME)
 
-        volume_path = _make_path_list(cfg, dir_name, img_name, rank)
+        volume_path = _make_path_list(cfg, dir_name, img_name, rank, mode)
         print('build MultiVolumeDataset for rank:', rank)
         label_path, valid_mask_path = None, None
         if cfg.DATASET.LABEL_NAME is not None:
             label_name = _get_file_list(cfg.DATASET.LABEL_NAME)
-            label_path = _make_path_list(cfg, dir_name, label_name, rank)
+            label_path = _make_path_list(cfg, dir_name, label_name, rank, mode)
             assert len(label_name) == len(img_name)
         dataset = MultiVolumeDataset(volume_path, label_path, pad_size=cfg.DATASET.PAD_SIZE,
                                      chunk_iter=cfg.DATASET.DATA_CHUNK_ITER * cfg.SOLVER.SAMPLES_PER_BATCH,

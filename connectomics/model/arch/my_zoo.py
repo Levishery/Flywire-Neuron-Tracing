@@ -5,6 +5,7 @@ from __future__ import division
 import torch
 import numpy as np
 import torch.nn as nn
+import einops
 import torch.nn.init as init
 import torch.nn.functional as F
 from ..block import *
@@ -275,14 +276,22 @@ class FC3DDiscriminator(nn.Module):
 # 	print(out.shape) # (1, 3, 56, 56, 56)
 
 class EdgeNetwork(nn.Module):
-    def __init__(self, input_size=[16, 72, 72], filters=[16, 32, 64], in_channel=3, **kwargs):
+    def __init__(self, input_size=[16, 72, 72], filters=[16, 32, 64], in_channel=3, embed_reduction=None, mask_embed=False, **kwargs):
         super(EdgeNetwork, self).__init__()
 
         self.filter_sizes = filters
         # self.dropout_ratio = [0.2, 0.5]
         self.dropout_ratio = [0.1, 0.1]
         self.depth = len(filters)
+        self.embed_reduction = embed_reduction
+        self.mask_embed = mask_embed
 
+        if embed_reduction is not None:
+            self.conv_reduction0 = conv3d_norm_act(embed_reduction[0], self.filter_sizes[0], kernel_size=(3, 3, 3), stride=(1, 1, 1),
+                                            padding=1, norm_mode='bn', act_mode='leaky_relu')
+            self.conv_reduction1 = conv3d_norm_act(self.filter_sizes[0], embed_reduction[1], kernel_size=(3, 3, 3),
+                                            stride=(1, 1, 1),
+                                            padding=1, norm_mode='bn', act_mode='leaky_relu')
         self.conv0 = nn.Conv3d(in_channel, self.filter_sizes[0], kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=1)
         self.conv1 = nn.Conv3d(self.filter_sizes[0], self.filter_sizes[0], kernel_size=(3, 3, 3), stride=(1, 1, 1),
                                padding=1)
@@ -313,8 +322,21 @@ class EdgeNetwork(nn.Module):
         self.dropout_final = nn.Dropout(p=self.dropout_ratio[1])
         self.Sigmoid = nn.Sigmoid()
 
-    def forward(self, x):
+    def forward(self, x, embedding=None):
         batch_size = x.shape[0]
+        if embedding is not None:
+            if self.mask_embed:
+                embedding_x = self.conv_reduction0(embedding)
+                embedding_x = self.conv_reduction1(embedding_x)
+                mask = einops.repeat(x[:, -1, :, :, :], 'b d h w -> b k d h w', k=self.embed_reduction[1])
+                embedding_x = mask * embedding_x
+                x = torch.cat((x[:, 0:2, :, :, :], embedding_x), dim=1)
+            else:
+                embedding = torch.cat((x[:, -1, :, :, :].unsqueeze(dim=1), embedding), dim=1)
+                embedding_x = self.conv_reduction0(embedding)
+                embedding_x = self.conv_reduction1(embedding_x)
+                x = torch.cat((x[:, 0:2, :, :, :], embedding_x), dim=1)
+
         x = self.norm0(self.leaky_relu(self.conv0(x)))
         x = self.norm1(self.leaky_relu(self.conv1(x)))
         x = self.dropout(self.norm2(self.PoolingLayer_anisotropy(x)))
