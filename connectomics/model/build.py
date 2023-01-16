@@ -40,7 +40,7 @@ def build_model(cfg, device, rank=None):
         'act_mode': cfg.MODEL.ACT_MODE,
         'norm_mode': cfg.MODEL.NORM_MODE,
         'pooling': cfg.MODEL.POOLING_LAYER,
-        'input_size': cfg.MODEL.INPUT_SIZE,
+        'input_size': cfg.MODEL.INPUT_SIZE if cfg.MODEL.MORPH_INPUT_SIZE is None else cfg.MODEL.MORPH_INPUT_SIZE,
     }
 
     if model_arch == 'fpn_3d':

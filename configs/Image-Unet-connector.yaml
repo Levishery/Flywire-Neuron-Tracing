@@ -26,8 +26,6 @@ DATASET:
   CONNECTOR_DATSET: True
   IMAGE_NAME:
   LABEL_NAME:
-  VAL_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_vali_filtered
-  INPUT_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_train
   OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet-connector-test
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True

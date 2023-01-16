@@ -311,8 +311,9 @@ class EdgeNetwork(nn.Module):
 
         self.PoolingLayer_isotropy = nn.MaxPool3d(kernel_size=(2, 2, 2), stride=(2, 2, 2))
         self.PoolingLayer_anisotropy = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
-        self.dense_size = int(input_size[0] * input_size[1] * input_size[1] * self.filter_sizes[-1] / (
-                pow(2, self.depth) * pow(2, self.depth) * pow(2, self.depth - 1)))
+        # self.dense_size = int(input_size[0] * input_size[1] * input_size[1] * self.filter_sizes[-1] / (
+        #         pow(2, self.depth) * pow(2, self.depth) * pow(2, self.depth - 1)))
+        self.dense_size = int(np.floor(input_size[0]/pow(2, self.depth - 1)) * np.floor(input_size[1]/pow(2, self.depth)) * np.floor(input_size[1]/pow(2, self.depth))) * self.filter_sizes[-1]
         self.dense_layer = nn.Linear(self.dense_size, 512)
         self.norm3 = nn.BatchNorm1d(512)
         self.classifier = nn.Linear(512, 1)

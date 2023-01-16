@@ -144,4 +144,4 @@ def sample_by_neuron():
             #                                                                 'score', 'neuron_id'])
             #                 df.to_csv(file_name, mode='a', header=True, index=False)
 
-sample_by_neuron()
+# sample_by_neuron()

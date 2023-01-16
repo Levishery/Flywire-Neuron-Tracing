@@ -19,6 +19,19 @@ def stat():
     df = df.sort_values(by="num_connector", ascending=False)
     df.to_csv('/braindat/lab/liusl/flywire/block_data/v2/30_percent.csv', index=False)
 
+def stat_neuron_connector():
+    target_connector_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/connector_data'
+    connector_files = os.listdir(target_connector_path)
+    valid_neuron_num = 0
+    connector_num = []
+    for connector_f in tqdm(connector_files):
+        df = pd.read_csv(os.path.join(target_connector_path, connector_f), index_col=0)
+        if len(df) > 10:
+            valid_neuron_num = valid_neuron_num + 1
+            connector_num.append(len(df))
+    average_connector = sum(connector_num)/valid_neuron_num
+    print(average_connector)
+
 def delete_far():
     connector_path = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_vali/connector_14_7_167.csv'
     target_path = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_vali_filtered/connector_14_7_167.csv'
@@ -38,8 +51,11 @@ def delete_far():
         idx = idx + 1
     connector_list.to_csv(target_path, header=False, index=False)
 
-delete_far()
-stat()
+
+stat_neuron_connector()
+
+# delete_far()
+# stat()
 # val_num = 200
 # source_dir = '/braindat/lab/liusl/flywire/block_data/2_percent'
 # df = pd.read_csv('/braindat/lab/liusl/flywire/block_data/2_percent.csv')
@@ -57,11 +73,11 @@ stat()
 # for i in rows[200:]:
 #     file_name = df['block'][i]
 #     shutil.copy(os.path.join(source_dir, file_name), train_dir)
-source_dir = '/braindat/lab/liusl/flywire/block_data/v2/30_percent'
-df = pd.read_csv('/braindat/lab/liusl/flywire/block_data/v2/30_percent.csv')
-train_dir = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train'
-
-total_num = 4000
-for i in range(total_num):
-    file_name = df['block'][i]
-    shutil.copy(os.path.join(source_dir, file_name), train_dir)
+# source_dir = '/braindat/lab/liusl/flywire/block_data/v2/30_percent'
+# df = pd.read_csv('/braindat/lab/liusl/flywire/block_data/v2/30_percent.csv')
+# train_dir = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train'
+#
+# total_num = 4000
+# for i in range(total_num):
+#     file_name = df['block'][i]
+#     shutil.copy(os.path.join(source_dir, file_name), train_dir)

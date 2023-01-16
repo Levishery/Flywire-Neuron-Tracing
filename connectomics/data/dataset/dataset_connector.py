@@ -264,6 +264,8 @@ class ConnectorDataset(torch.utils.data.Dataset):
         np.random.shuffle(seg_negative)
         # fixed number of seg_negative
         seg_negative = seg_negative[:20]
+        if len(seg_negative) < 5:
+            return None, None, None, None
 
         pos_data = {'pos': pos,
                     'seg_start': seg_start,

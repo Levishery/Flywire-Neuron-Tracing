@@ -9,10 +9,9 @@ MODEL:
   TARGET_OPT: ["e"]
   LOSS_OPTION:
     [[ "DiscriminativeLoss", "ConnectionLoss" ]]
-  LOSS_WEIGHT: [[ 0.4, 1.0 ]]
+  LOSS_WEIGHT: [[ 0.2, 1.0 ]]
   WEIGHT_OPT: [[ "0", "0" ]]
   OUTPUT_ACT: [[ "none",  "none" ]]
-  MIXED_PRECESION: True
 MONITOR:
   ITERATION_NUM: [20, 200]
 SOLVER:
@@ -20,12 +19,12 @@ SOLVER:
   # DECAY_LOSS_WEIGHT: True
   ITERATION_RESTART: True
   NAME: AdamW
-  BASE_LR: 5e-04
+  BASE_LR: 2e-03
   WARMUP_FACTOR: 2e-5
   WARMUP_ITERS: 50000
-  STEPS: (250000, 350000)
+  STEPS: (250000, 450000)
   ITERATION_SAVE: 8000
-  ITERATION_TOTAL: 2000000
+  ITERATION_TOTAL: 500000
   ITERATION_VAL: 4000
   SAMPLES_PER_BATCH: 4 # PER GPU
 DATASET:
@@ -33,7 +32,7 @@ DATASET:
   IMAGE_NAME:
   LABEL_NAME:
   VAL_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_hard_vali
-  INPUT_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_hard
+  INPUT_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000_hard
   OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-swin-finetune-hard
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True

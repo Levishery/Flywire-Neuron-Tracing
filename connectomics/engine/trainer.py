@@ -137,6 +137,24 @@ class Trainer(object):
 
             self._train_misc(loss, pred, volume, target, weight, iter_total, losses_vis)
 
+            # from sklearn.decomposition import PCA
+            # volume_save = np.asarray(volume.clone().detach().cpu())
+            # x = (volume_save[0, 0, :] - volume_save[0, 0, :].min()) * 240
+            # tf.imsave('volume.tif', x.astype(np.uint8))
+            # x = np.asarray(emb2rgb(pred))
+            # x = (x[0, :] - x[0, :].min()) / (x[0, :].max() - x[0, :].min()) * 240
+            # tf.imsave('volume.tif', x.transpose(1, 0, 2, 3).astype(np.uint8))
+            # volume_save = np.asarray(target[0].clone().detach().cpu())
+            # labels = np.unique(volume_save[0, 1, 0, :])
+            # mask = volume_save[0, 1, 0, :] == labels[1]
+            # tf.imsave('target1.tif', (mask*240).astype(np.uint8))
+
+
+
+
+
+
+
         self.maybe_save_swa_model()
 
     def _train_misc(self, loss, pred, volume, target, weight,
@@ -242,7 +260,7 @@ class Trainer(object):
                 if DEBUG:
                     row = pd.DataFrame([{'block': self.dataset_val.dataset.connector_path.split('/')[-1],
                                          'connector_num': len(self.dataset_val.dataset), 'recall': recall.item(), 'acc': accuracy.item()}])
-                    row.to_csv('/braindat/lab/liusl/flywire/block_data/v2/morph_performence.csv', mode='a', header=False, index=False)
+                    row.to_csv('/braindat/lab/liusl/flywire/block_data/v2/morph_performence_2.csv', mode='a', header=False, index=False)
                 print(recall)
                 print(accuracy)
                 self.monitor.logger.log_tb.add_scalar(
@@ -603,5 +621,8 @@ class Trainer(object):
                     volume_input = torch.cat((volume_morph.to(self.device, non_blocking=True), volume_embedding), dim=1)
         else:
             volume_input = volume_morph
+        if self.cfg.MODEL.MORPH_INPUT_SIZE is not None:
+            resize = torch.nn.Upsample(size=self.cfg.MODEL.MORPH_INPUT_SIZE)
+            volume_input = resize(volume_input)
         return volume_input, 0
 

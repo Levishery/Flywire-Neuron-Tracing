@@ -16,12 +16,13 @@ MODEL:
   WEIGHT_OPT: [[ "0", "0" ]]
   OUTPUT_ACT: [[ "none",  "none" ]]
   NORM_MODE: bn
+  MIXED_PRECESION: False
 DATASET:
   CONNECTOR_DATSET: True
   IMAGE_NAME:
   LABEL_NAME:
-  VAL_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_vali_filtered
-  INPUT_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_train
+  VAL_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_test
+  INPUT_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000
   OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet-connector-test
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True

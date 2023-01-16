@@ -12,7 +12,6 @@ MODEL:
   LOSS_WEIGHT: [[ 1.0, 0.1 ]]
   WEIGHT_OPT: [[ "0", "0" ]]
   OUTPUT_ACT: [[ "none",  "none" ]]
-  MIXED_PRECESION: True
 MONITOR:
   ITERATION_NUM: [20, 200]
 SOLVER:
