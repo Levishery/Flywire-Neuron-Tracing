@@ -97,6 +97,7 @@ def make_parallel(model, cfg, device, rank=None, find_unused_parameters=True):
     elif cfg.SYSTEM.PARALLEL == 'DP':
         gpu_device_ids = list(range(cfg.SYSTEM.NUM_GPUS))
         print('Parallelism with DataParallel.')
+        print('device id: ', gpu_device_ids)
         model = nn.DataParallel(model, device_ids=gpu_device_ids)
         model = model.to(device)
 

@@ -129,18 +129,21 @@ class ConnectorDataset(torch.utils.data.Dataset):
             # print(idx)
             connector = self.connector_list.iloc[idx]
             # connector = self.connector_list.iloc[386]
-            pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample(connector, morphology=self.morphology_dataset)
+            pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample(connector,
+                                                                                            morphology=self.morphology_dataset)
             while pos_data is None:
                 # this data is not suitable for training
                 idx = random.randint(0, self.connector_num - 1)
                 # print(idx)
                 connector = self.connector_list.iloc[idx]
-                pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample(connector, morphology=self.morphology_dataset)
+                pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample(connector,
+                                                                                                morphology=self.morphology_dataset)
             return pos_data, out_volume, out_target, out_weight
 
         elif self.mode == 'val':
             connector = self.connector_list.iloc[index]
-            pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample_vali(connector, morphology=self.morphology_dataset)
+            pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample_vali(connector,
+                                                                                                 morphology=self.morphology_dataset)
             # return all zero for invalid samples, which will not be computed by connection loss
             if pos_data is None:
                 pos_data = {'pos': [0, 0, 0, 0],
@@ -162,7 +165,20 @@ class ConnectorDataset(torch.utils.data.Dataset):
 
         elif self.mode == 'test':
             connector = self.connector_list.iloc[index]
-            return self._connector_to_volume_sample(connector, morphology=self.morphology_dataset)
+            if not self.morphology_dataset:
+                return self._connector_to_volume_sample(connector, morphology=self.morphology_dataset)
+            else:
+                _ = self.get_test_samples(connector)
+                pos = {'pos': [0, 0, 0, 0],
+                            'seg_start': 0,
+                            'seg_positive': 0,
+                            'seg_target_relabeled': [0],
+                            'seg_negative': [0]}
+                out_volume = np.zeros(self.model_input_size).astype(np.float32)
+                out_volume = np.expand_dims(out_volume, 0)
+                out_label = np.zeros(self.model_input_size)
+                return pos, out_volume, out_label, 0, [0]
+                # return self._connector_to_test_sample(connector, morphology=self.morphology_dataset)
 
     def _crop_with_pos(self, pos, vol_size):
         out_volume = (crop_volume(
@@ -300,11 +316,11 @@ class ConnectorDataset(torch.utils.data.Dataset):
             seg_1_morph = np.expand_dims(np.array(out_label == seg_1), 0)
             seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
             out_volume = np.concatenate((out_volume, seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
-                                        seg_combined_morph.astype(np.float32)))
+                                         seg_combined_morph.astype(np.float32)))
             out_target = [[np.asarray(is_positive_sample)]]
             pos_data = {'pos': pos,
-                    'seg_start': seg_0,
-                    'seg_candidate': seg_1}
+                        'seg_start': seg_0,
+                        'seg_candidate': seg_1}
 
         return pos_data, out_volume, out_target, out_weight
 
@@ -388,6 +404,8 @@ class ConnectorDataset(torch.utils.data.Dataset):
         np.random.shuffle(seg_negative)
         # fixed number of seg_negative
         seg_negative = seg_negative[:20]
+        if len(seg_negative) < 5:
+            return None, None, None, None
 
         pos_data = {'pos': pos,
                     'seg_start': seg_start,
@@ -422,11 +440,11 @@ class ConnectorDataset(torch.utils.data.Dataset):
             seg_1_morph = np.expand_dims(np.array(out_label == seg_1), 0)
             seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
             out_volume = np.concatenate((out_volume, seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
-                                        seg_combined_morph.astype(np.float32)))
+                                         seg_combined_morph.astype(np.float32)))
             out_target = [[np.asarray(is_positive_sample)]]
             pos_data = {'pos': pos,
-                    'seg_start': seg_0,
-                    'seg_candidate': seg_1}
+                        'seg_start': seg_0,
+                        'seg_candidate': seg_1}
         return pos_data, out_volume, out_target, out_weight
 
     def _connector_to_volume_sample(self, connector, morphology=False):
@@ -450,10 +468,91 @@ class ConnectorDataset(torch.utils.data.Dataset):
                 seg_1_morph = np.expand_dims(np.array(out_label == candidate), 0)
                 seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
                 morph_input = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
-                                        seg_combined_morph.astype(np.float32)))
+                                              seg_combined_morph.astype(np.float32)))
                 morph_list.append(torch.from_numpy(morph_input))
             out_label = morph_list
         return pos, out_volume, out_label, seg_start, candidates
+
+    def _connector_to_test_sample(self, connector, morphology=True):
+        cord = connector[2][1:-1].split()
+        seg_start = connector[0]
+        seg_candidate = connector[1]
+        pos, out_volume = self._crop_with_pos([0, cord[0], cord[1], cord[2]], self.sample_volume_size)
+        out_label = crop_volume(self.vol_ffn1, self.sample_volume_size, pos[1:])
+        out_volume = np.expand_dims(out_volume, 0)
+        out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
+
+        if morphology:
+            seg_0_morph = np.expand_dims(np.array(out_label == seg_start), 0)
+            seg_1_morph = np.expand_dims(np.array(out_label == seg_candidate), 0)
+            seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
+            morph_input = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
+                                          seg_combined_morph.astype(np.float32)))
+            out_label = morph_input
+        return pos, out_volume, out_label, seg_start, [seg_candidate]
+
+    def get_test_samples(self, connector):
+        self.record_path = self.connector_path.replace('30_percent_test_3000', '30_percent_test_3000_reformat')
+        cord = connector[2][1:-1].split()
+        cord_start_offset = np.asarray(connector[3][1:-1].split(), dtype=np.float32) - np.asarray(cord,
+                                                                                                  dtype=np.float32)
+        cord_start_offset = np.asarray([cord_start_offset[0] / 4, cord_start_offset[1] / 4, cord_start_offset[2]])
+        cord_pos_offset = np.asarray(connector[4][1:-1].split(), dtype=np.float32) - np.asarray(cord, dtype=np.float32)
+        cord_pos_offset = np.asarray([cord_pos_offset[0] / 4, cord_pos_offset[1] / 4, cord_pos_offset[2]])
+        if np.any(np.abs(cord_start_offset - cord_pos_offset) > np.asarray(
+                [self.sample_volume_size[1] - 32, self.sample_volume_size[2] - 32, self.sample_volume_size[0] - 2],
+                dtype=np.float32)):
+            return None, None, None, None
+        cord = self.fafb_to_block(float(cord[0]), float(cord[1]), float(cord[2]))
+
+        # sample the nearby segments as negative samples, while masking the others as background
+        seg_start = connector[0]
+        seg_positive = connector[1]
+
+        # use random offset to prevent the model from using the position information
+        sample_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_offset,
+                                                  self.model_input_size[1] / self.alpha_offset, 1)
+        count = 0
+        while not (self.is_valid_offset(sample_offset, cord)):
+            sample_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_offset,
+                                                      self.model_input_size[1] / self.alpha_offset, 1)
+            count = count + 1
+            if count > 10:  # this data point cannot be sampled, because it's at the boundary of a block and have a large gap between seg_start and seg_positive
+                return None, None, None, None
+
+        pos, out_volume = self._crop_with_pos([0, cord[2] - self.sample_volume_size[0] / 2 + sample_offset[0][0],
+                                               cord[0] - self.sample_volume_size[1] / 2 + sample_offset[1][0],
+                                               cord[1] - self.sample_volume_size[2] / 2 + sample_offset[2][0]],
+                                              self.sample_volume_size)
+        out_label = crop_volume(self.vol_ffn1, self.sample_volume_size, pos[1:])
+
+        seg_target_relabeled = [seg_start, seg_positive]
+
+        # the negative position should be around the connection point
+        # print(sample_offset)
+        neg_cord_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_neg,
+                                                    self.model_input_size[1] / self.alpha_neg, self.neg_point_num)
+        neg_cord_offset = neg_cord_offset - sample_offset
+        neg_cord_offset = np.asarray(
+            [np.clip(neg_cord_offset[0], - self.model_input_size[0] / 2, self.model_input_size[0] / 2 - 1),
+             np.clip(neg_cord_offset[1], - self.model_input_size[1] / 2, self.model_input_size[1] / 2 - 1),
+             np.clip(neg_cord_offset[2], - self.model_input_size[2] / 2, self.model_input_size[2] / 2 - 1)])
+        neg_cord_pos = neg_cord_offset + np.transpose(np.asarray([np.asarray(self.model_input_size) / 2]))
+        neg_cord_pos = list(neg_cord_pos.astype(np.int32))
+
+        seg_negative = np.setdiff1d(np.asarray(np.unique(out_label[neg_cord_pos[0], neg_cord_pos[1], neg_cord_pos[2]])),
+                                    [0, seg_target_relabeled[0], seg_target_relabeled[1]])
+        np.random.shuffle(seg_negative)
+        # fixed number of seg_negative
+        seg_negative = seg_negative[:20]
+        row = pd.DataFrame(
+            [{'node0_segid': int(seg_start), 'node1_segid': int(seg_positive), 'cord': pos, 'target': 1, 'prediction': -1}])
+        row.to_csv(self.record_path, mode='a', header=False, index=False)
+        row = pd.DataFrame(
+            [{'node0_segid': int(seg_start), 'node1_segid': int(seg_negative[0]), 'cord': pos, 'target': 0, 'prediction': -1}])
+        row.to_csv(self.record_path, mode='a', header=False, index=False)
+
+        return None
 
     def fafb_to_block(self, x, y, z):
         '''

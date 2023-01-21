@@ -9,6 +9,7 @@ import GPUtil
 import numpy as np
 from yacs.config import CfgNode
 import einops
+import dill
 import pandas as pd
 import tifffile as tf
 
@@ -312,6 +313,41 @@ class Trainer(object):
         end = time.perf_counter()
         print("Prediction time: %.2fs" % (end - start))
 
+    def test_embed_edgenetwork(self):
+        r"""Inference function of the trainer class.
+        """
+        self.model.eval() if self.cfg.INFERENCE.DO_EVAL else self.model.train()
+        print("Total number of batches: ", len(self.dataloader))
+
+        start = time.perf_counter()
+        with torch.no_grad():
+            for i, sample in enumerate(self.dataloader):
+                print('progress: %d/%d batches, total time %.2fs' %
+                      (i + 1, len(self.dataloader), time.perf_counter() - start))
+
+                # volume = sample.out_input
+                # target, weight = sample.out_target_l
+                # volume, embedding = self.get_morph_input(volume)
+                # # prediction
+                # with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
+                #     if self.cfg.MODEL.EMBED_REDUCTION is None:
+                #         volume = volume.contiguous().to(self.device, non_blocking=True)
+                #         pred = self.model(volume)
+                #     else:
+                #         pred = self.model(volume, embedding)
+                # TP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 1))
+                # TP_total = TP_total + TP
+                # FP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 0))
+                # FP_total = FP_total + FP
+                # FN = sum(torch.logical_and(pred.detach().cpu() < 0.5, target[0] == 1))
+                # FN_total = FN_total + FN
+
+                if torch.cuda.is_available() and i % 50 == 0:
+                    GPUtil.showUtilization(all=True)
+
+        end = time.perf_counter()
+        print("Prediction time: %.2fs" % (end - start))
+
     def test_one_neuron(self):
         dir_name = _get_file_list(self.cfg.DATASET.INPUT_PATH)
         block_name = _make_path_list(self.cfg, dir_name, None, self.rank)
@@ -562,8 +598,17 @@ class Trainer(object):
                         if self.val_loss_total < self.best_val_loss_total:
                             self.best_val_loss_total = self.val_loss_total
                             self.save_checkpoint(chunk, is_best=True)
-            else:
-                print('Multi-volume is for model pretraining.')
+        else:
+            # inference for EmbedEdgeNetwork
+            num_chunk = len(self.dataset.volume_path)
+            print("Total number of chunks: ", num_chunk)
+            for chunk in range(num_chunk):
+                self.dataset.updatechunk()
+                csv_path = self.dataset.dataset.connector_path.replace('30_percent_test_3000', '30_percent_test_3000_reformat')
+                if not os.path.exists(csv_path):
+                    self.dataloader = build_dataloader(self.cfg, None, mode, dataset=self.dataset.dataset)
+                    self.dataloader = iter(self.dataloader)
+                    self.test_embed_edgenetwork()
             return
 
     def xpblock_to_fafb(self, z_block, y_block, x_block, z_coo=0, y_coo=0, x_coo=0):

@@ -4,8 +4,8 @@ SYSTEM:
   NUM_GPUS: 2
   NUM_CPUS: 2
 MODEL:
-  INPUT_SIZE: [17, 227, 227]
-  OUTPUT_SIZE: [17, 227, 227]
+  INPUT_SIZE: [ 16, 128, 128 ]
+  OUTPUT_SIZE: [ 16, 128, 128 ]
   IN_PLANES: 1
   ISOTROPY: [ False, True, True, True, True]
   OUT_PLANES: 16
@@ -41,11 +41,11 @@ SOLVER:
 MONITOR:
   ITERATION_NUM: [20, 200]
 INFERENCE:
-  INPUT_SIZE: [17, 257, 257]
-  OUTPUT_SIZE: [17, 257, 257]
+  INPUT_SIZE: [ 16, 128, 128 ]
+  OUTPUT_SIZE: [ 16, 128, 128 ]
   OUTPUT_ACT: ["sigmoid"]
-  IMAGE_NAME: test_input.tif # or path to your test images
-  OUTPUT_PATH: /data12T/janechen/SNEMI3D/test
+  IMAGE_NAME:  # or path to your test images
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
   OUTPUT_NAME: result.tif
   PAD_SIZE: [0, 0, 0]
   UNPAD: False

@@ -30,8 +30,6 @@ DATASET:
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True
 INFERENCE:
-  OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
-  OUTPUT_NAME: result.h5
   OUTPUT_ACT: ["none"]
 AUGMENTOR:
   SMOOTH: False

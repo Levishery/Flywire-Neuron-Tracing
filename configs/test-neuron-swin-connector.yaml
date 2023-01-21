@@ -27,7 +27,5 @@ INFERENCE:
   INPUT_SIZE: [ 16, 128, 128 ]
   OUTPUT_SIZE: [ 16, 128, 128 ]
   DO_SINGLY: True
-  OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
-  OUTPUT_NAME: result.h5
   OUTPUT_ACT: ["none"]
   SAMPLES_PER_BATCH: 4 # per gpu
