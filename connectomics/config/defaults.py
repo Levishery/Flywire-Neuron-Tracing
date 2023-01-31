@@ -114,7 +114,7 @@ _C.MODEL.IMAGE_MODEL_CKPT = None
 _C.MODEL.EMBED_REDUCTION = None
 _C.MODEL.MORPH_INPUT_SIZE = None
 _C.MODEL.MASK_EMBED = False
-
+_C.MODEL.DROP_MOD = False
 # Predict an auxiliary output (only works with 2D DeeplabV3)
 _C.MODEL.AUX_OUT = False
 

@@ -8,6 +8,7 @@ from sklearn.decomposition import PCA
 from scipy.ndimage import distance_transform_edt
 from skimage.morphology import remove_small_holes
 from skimage.measure import label as label_cc  # avoid namespace conflict
+from numpy.random import randint
 
 from .data_misc import get_padsize, array_unpad
 
@@ -16,6 +17,7 @@ __all__ = [
     'edt_instance',
     'decode_quantize',
     'pca_emb',
+    'patch_rand_drop',
 ]
 
 
@@ -206,3 +208,33 @@ def pca_emb(x_emb, dim=24, n_components=3):
     new_emb = np.transpose(new_emb, [0, 4, 1, 2, 3])
     new_emb = torch.tensor(new_emb)
     return new_emb
+
+def patch_rand_drop(x,
+                    x_rep=None,
+                    max_drop=0.15,
+                    max_block_sz=0.25,
+                    tolr=0.05):
+    c, h, w, z = x.size()
+    n_drop_pix = np.random.uniform(0, max_drop) * h * w * z
+    mx_blk_height = int(h * max_block_sz)
+    mx_blk_width = int(w * max_block_sz)
+    mx_blk_slices = int(z * max_block_sz)
+    tolr = (np.ceil(tolr * h), np.ceil(tolr * w), np.ceil(tolr * z))  # mask no smaller than tolr
+    total_pix = 0
+    while total_pix < n_drop_pix:
+        rnd_r = randint(0, h - tolr[0])
+        rnd_c = randint(0, w - tolr[1])
+        rnd_s = randint(0, z - tolr[2])
+        rnd_h = min(randint(tolr[0], mx_blk_height) + rnd_r, h)
+        rnd_w = min(randint(tolr[1], mx_blk_width) + rnd_c, w)
+        rnd_z = min(randint(tolr[2], mx_blk_slices) + rnd_s, z)
+        if x_rep is None:
+            x_uninitialized = torch.zeros((c, rnd_h - rnd_r,
+                                           rnd_w - rnd_c,
+                                           rnd_z - rnd_s),
+                                          dtype=x.dtype)
+            x[:, rnd_r:rnd_h, rnd_c:rnd_w, rnd_s:rnd_z] = x_uninitialized
+        else:
+            x[:, rnd_r:rnd_h, rnd_c:rnd_w, rnd_s:rnd_z] = x_rep[:, rnd_r:rnd_h, rnd_c:rnd_w, rnd_s:rnd_z]
+        total_pix = total_pix + (rnd_h - rnd_r) * (rnd_w - rnd_c) * (rnd_z - rnd_s)
+    return x

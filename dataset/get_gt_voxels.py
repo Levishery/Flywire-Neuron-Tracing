@@ -21,7 +21,7 @@ def get_args():
     return args
 
 
-if __name__=="__main__":
+def get_neuron_blocks():
     fafbseg.flywire.set_chunkedgraph_secret("5814c407f6cca6b2c1e50f5f99e6a555")
     create_logger(name='l1', file='/flywire_data//flywire2fafbffn1.log', sub_print=True)
     vol = CloudVolume('graphene://https://prodv1.flywire-daf.com/segmentation/1.0/fly_v31', use_https=True, mip=0,
@@ -56,3 +56,29 @@ if __name__=="__main__":
             for super_voxel in neuron_supervoxels:
                 neuron_voxels = np.where(flywire_block == super_voxel)
             neuron_voxels_fafbv14 = navis.xform_brain(neuron_voxels)
+
+
+def get_one_block():
+    fafbseg.flywire.set_chunkedgraph_secret("5814c407f6cca6b2c1e50f5f99e6a555")
+    create_logger(name='l1', file='/flywire_data//flywire2fafbffn1.log', sub_print=True)
+    vol = CloudVolume('graphene://https://prodv1.flywire-daf.com/segmentation/1.0/fly_v31', use_https=True, mip=0,
+                      secrets='5814c407f6cca6b2c1e50f5f99e6a555')
+    block_name = 'connector_23_7_58'
+    [block_x, block_y, block_z] = block_name.split('_')[1:]
+    points = [xpblock_to_fafb(block_z, block_x, block_y, 0, 0, 0),
+              xpblock_to_fafb(block_z, block_x, block_y, 0, 0, 1735),
+              xpblock_to_fafb(block_z, block_x, block_y, 0, 1735, 0),
+              xpblock_to_fafb(block_z, block_x, block_y, 0, 1735, 1735),
+              xpblock_to_fafb(block_z, block_x, block_y, 25, 0, 0),
+              xpblock_to_fafb(block_z, block_x, block_y, 25, 0, 1735),
+              xpblock_to_fafb(block_z, block_x, block_y, 25, 1735, 0),
+              xpblock_to_fafb(block_z, block_x, block_y, 25, 1735, 1735)]
+    flywire_points = navis.xform_brain(points, source='FAFB14raw', target='FLYWIREraw', verbose=False)
+    bbox = np.min(flywire_points['x']), np.max(flywire_points['x']), np.min(flywire_points['y']), \
+        np.max(flywire_points['y']), np.min(flywire_points['z']), np.max(flywire_points['z'])
+    flywire_block = vol[bbox[0] / 4 - 6: bbox[1] / 4 + 7, bbox[2] / 4 - 6: bbox[3] / 4 + 7, bbox[4] - 3: bbox[5] + 4]
+    supervoxel_ids = np.unique(flywire_block)
+    root_ids = fafbseg.flywire.supervoxels_to_roots(supervoxel_ids)
+
+
+

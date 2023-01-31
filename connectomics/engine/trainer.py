@@ -1,4 +1,6 @@
 from __future__ import print_function, division
+
+import random
 from typing import Optional
 import warnings
 
@@ -6,6 +8,7 @@ import os
 import time
 import math
 import GPUtil
+import matplotlib.pyplot as plt
 import numpy as np
 from yacs.config import CfgNode
 import einops
@@ -26,8 +29,7 @@ from ..data.augmentation import build_train_augmentor, TestAugmentor
 from ..data.dataset import build_dataloader, get_dataset, ConnectorDataset
 from ..data.dataset.build import _get_file_list, _make_path_list
 from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking, pca_emb
-from ..data.utils import get_padsize, array_unpad, readvol
-
+from ..data.utils import get_padsize, array_unpad, readvol, patch_rand_drop
 
 DEBUG = 0
 
@@ -50,7 +52,7 @@ class Trainer(object):
                  rank: Optional[int] = None,
                  checkpoint: Optional[str] = None,
                  cfg_image_model: CfgNode = None,
-                 checkpoint_image_model: Optional[str] = None,):
+                 checkpoint_image_model: Optional[str] = None, ):
 
         assert mode in ['train', 'test']
         self.cfg = cfg
@@ -150,12 +152,6 @@ class Trainer(object):
             # mask = volume_save[0, 1, 0, :] == labels[1]
             # tf.imsave('target1.tif', (mask*240).astype(np.uint8))
 
-
-
-
-
-
-
         self.maybe_save_swa_model()
 
     def _train_misc(self, loss, pred, volume, target, weight,
@@ -254,14 +250,16 @@ class Trainer(object):
                 '%s_Validation_Loss' % name, val_loss, iter_total)
             if not self.cfg.DATASET.MORPHOLOGY_DATSET:
                 self.monitor.visualize(volume, target, pred,
-                                   weight, iter_total, suffix='Val')
+                                       weight, iter_total, suffix='Val')
             else:
-                recall = TP_total/(TP_total + FN_total)
-                accuracy = TP_total/(TP_total + FP_total)
+                recall = TP_total / (TP_total + FN_total)
+                accuracy = TP_total / (TP_total + FP_total)
                 if DEBUG:
                     row = pd.DataFrame([{'block': self.dataset_val.dataset.connector_path.split('/')[-1],
-                                         'connector_num': len(self.dataset_val.dataset), 'recall': recall.item(), 'acc': accuracy.item()}])
-                    row.to_csv('/braindat/lab/liusl/flywire/block_data/v2/morph_performence_2.csv', mode='a', header=False, index=False)
+                                         'connector_num': len(self.dataset_val.dataset), 'recall': recall.item(),
+                                         'acc': accuracy.item()}])
+                    row.to_csv('/braindat/lab/liusl/flywire/block_data/v2/morph_performence_2.csv', mode='a',
+                               header=False, index=False)
                 print(recall)
                 print(accuracy)
                 self.monitor.logger.log_tb.add_scalar(
@@ -313,7 +311,7 @@ class Trainer(object):
         end = time.perf_counter()
         print("Prediction time: %.2fs" % (end - start))
 
-    def test_embed_edgenetwork(self):
+    def get_test_dataset(self):
         r"""Inference function of the trainer class.
         """
         self.model.eval() if self.cfg.INFERENCE.DO_EVAL else self.model.train()
@@ -325,28 +323,60 @@ class Trainer(object):
                 print('progress: %d/%d batches, total time %.2fs' %
                       (i + 1, len(self.dataloader), time.perf_counter() - start))
 
-                # volume = sample.out_input
-                # target, weight = sample.out_target_l
-                # volume, embedding = self.get_morph_input(volume)
-                # # prediction
-                # with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
-                #     if self.cfg.MODEL.EMBED_REDUCTION is None:
-                #         volume = volume.contiguous().to(self.device, non_blocking=True)
-                #         pred = self.model(volume)
-                #     else:
-                #         pred = self.model(volume, embedding)
-                # TP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 1))
-                # TP_total = TP_total + TP
-                # FP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 0))
-                # FP_total = FP_total + FP
-                # FN = sum(torch.logical_and(pred.detach().cpu() < 0.5, target[0] == 1))
-                # FN_total = FN_total + FN
-
                 if torch.cuda.is_available() and i % 50 == 0:
                     GPUtil.showUtilization(all=True)
 
         end = time.perf_counter()
         print("Prediction time: %.2fs" % (end - start))
+
+    def test_embededge(self, visualize_csv_path=None):
+        r"""Inference function of the trainer class.
+        """
+        self.model.eval() if self.cfg.INFERENCE.DO_EVAL else self.model.train()
+        print("Total number of batches: ", len(self.dataloader))
+        TP_total = 0
+        FP_total = 0
+        TN_total = 0
+        FN_total = 0
+        start = time.perf_counter()
+        with torch.no_grad():
+            for i, sample in enumerate(self.dataloader):
+                print('progress: %d/%d batches, total time %.2fs' %
+                      (i + 1, len(self.dataloader), time.perf_counter() - start))
+
+                volume = sample.out_input
+                target = torch.tensor(np.expand_dims(np.asarray(sample.seg_start), axis=1))
+                ids = sample.candidates
+                volume, embedding = self.get_morph_input(volume)
+                # prediction
+                with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
+                    if self.cfg.MODEL.EMBED_REDUCTION is None:
+                        volume = volume.contiguous().to(self.device, non_blocking=True)
+                        pred = self.model(volume)
+                    else:
+                        pred = self.model(volume, embedding)
+                pred_record = pred.detach().cpu()
+                TP = sum(torch.logical_and(pred_record > 0.5, target == 1))
+                TP_total = TP_total + TP
+                FP = sum(torch.logical_and(pred_record > 0.5, target == 0))
+                FP_total = FP_total + FP
+                FN = sum(torch.logical_and(pred_record < 0.5, target == 1))
+                FN_total = FN_total + FN
+                if visualize_csv_path is not None:
+                    for idx in range(len(target)):
+                        row = pd.DataFrame(
+                            [{'node0_segid': int(ids[idx][0]), 'node1_segid': int(ids[idx][1]),
+                              'target': int(target[idx] == 1),
+                              'prediction': int((pred_record > 0.5)[idx]), 'value': pred_record[idx].item()}])
+                        row.to_csv(visualize_csv_path, mode='a', header=False, index=False)
+                if torch.cuda.is_available() and i % 50 == 0:
+                    GPUtil.showUtilization(all=True)
+
+        recall = TP_total / (TP_total + FN_total)
+        accuracy = TP_total / (TP_total + FP_total)
+        end = time.perf_counter()
+        print("Prediction time: %.2fs" % (end - start))
+        return recall, accuracy
 
     def test_one_neuron(self):
         dir_name = _get_file_list(self.cfg.DATASET.INPUT_PATH)
@@ -426,7 +456,7 @@ class Trainer(object):
             filename = os.path.join(self.output_dir, filename)
             torch.save(state, filename)
 
-    def update_checkpoint(self, checkpoint: Optional[str] = None, is_image_model = False):
+    def update_checkpoint(self, checkpoint: Optional[str] = None, is_image_model=False):
         r"""Update the model with the specified checkpoint file path.
         """
         if checkpoint is None:
@@ -457,7 +487,7 @@ class Trainer(object):
 
             # 1. filter out unnecessary keys by name
             pretrained_dict = {k: v for k,
-                                        v in pretrained_dict.items() if k in model_dict}
+            v in pretrained_dict.items() if k in model_dict}
             # 2. overwrite entries in the existing state dict (if size match)
             for param_tensor in pretrained_dict:
                 if model_dict[param_tensor].size() == pretrained_dict[param_tensor].size():
@@ -589,26 +619,56 @@ class Trainer(object):
 
                         while len(self.dataset_val.volume_done) < len(self.dataset_val.volume_path):
                             self.dataset_val.updatechunk()
-                            self.val_loader = build_dataloader(self.cfg, None, mode='val', dataset=self.dataset_val.dataset)
+                            self.val_loader = build_dataloader(self.cfg, None, mode='val',
+                                                               dataset=self.dataset_val.dataset)
                             self.val_loader = iter(self.val_loader)
                             self.validate(self.start_iter)
                             del self.val_loader
                         if not hasattr(self, 'best_val_loss_total'):
                             self.best_val_loss_total = self.val_loss_total
+                        self.monitor.logger.log_tb.add_scalar(
+                            'Total_Validation_Loss', self.val_loss_total, self.start_iter)
+                        print('Total_Validation_Loss', self.val_loss_total)
                         if self.val_loss_total < self.best_val_loss_total:
                             self.best_val_loss_total = self.val_loss_total
                             self.save_checkpoint(chunk, is_best=True)
         else:
             # inference for EmbedEdgeNetwork
             num_chunk = len(self.dataset.volume_path)
+            rec_list = []
+            acc_list = []
             print("Total number of chunks: ", num_chunk)
+            result_path = os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'block_result.csv')
+            if not os.path.exists(os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'predictions')):
+                os.makedirs(os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'predictions'))
             for chunk in range(num_chunk):
                 self.dataset.updatechunk()
-                csv_path = self.dataset.dataset.connector_path.replace('30_percent_test_3000', '30_percent_test_3000_reformat')
+                block_name = self.dataset.dataset.connector_path.split('/')[-1]
+                csv_path = self.dataset.dataset.connector_path.replace('30_percent_test_3000',
+                                                                       '30_percent_test_3000_reformat')
                 if not os.path.exists(csv_path):
+                    print('#W Test data do not exist, extracting.')
+                    self.dataset.dataset.make_test_data = True
                     self.dataloader = build_dataloader(self.cfg, None, mode, dataset=self.dataset.dataset)
                     self.dataloader = iter(self.dataloader)
-                    self.test_embed_edgenetwork()
+                    self.get_test_dataset()
+                else:
+                    visualize_csv_path = os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'predictions', block_name)
+                    if os.path.exists(visualize_csv_path):
+                        print('block %s is already tested.' % block_name)
+                        continue
+                    self.dataloader = build_dataloader(self.cfg, None, mode, dataset=self.dataset.dataset)
+                    self.dataloader = iter(self.dataloader)
+                    rec, acc = self.test_embededge(visualize_csv_path)
+                    rec_list.append(rec)
+                    acc_list.append(acc)
+                    row = pd.DataFrame(
+                        [{'block_name': block_name, 'recall': rec.item(), 'accuracy': acc.item()}])
+                    row.to_csv(result_path, mode='a', header=False, index=False)
+            row = pd.DataFrame(
+                [{'block_name': 'average', 'recall': np.mean(np.array(rec_list)),
+                  'accuracy': np.mean(np.array(acc_list))}])
+            row.to_csv(result_path, mode='a', header=False, index=False)
             return
 
     def xpblock_to_fafb(self, z_block, y_block, x_block, z_coo=0, y_coo=0, x_coo=0):
@@ -644,24 +704,54 @@ class Trainer(object):
                 morph_dim = 3
             embed_dim = self.cfg.MODEL.IN_PLANES - morph_dim
             with torch.no_grad():
-                image_batch_size = self.cfg_image_model.SOLVER.SAMPLES_PER_BATCH
-                num_batch = int(np.ceil(volume_image.shape[0]/image_batch_size))
+                # image_batch_size = self.cfg_image_model.SOLVER.SAMPLES_PER_BATCH  # must be 1
+                image_batch_size = 1
+                num_batch = int(np.ceil(volume_image.shape[0] / image_batch_size))
                 volume_embedding_list = []
                 for i in range(num_batch):
-                    input_image = volume_image[i*image_batch_size:(i+1)*image_batch_size].to(self.device, non_blocking=True)
+                    input_image = volume_image[i * image_batch_size:(i + 1) * image_batch_size].to(self.device,
+                                                                                                   non_blocking=True)
                     input_image = input_image.unsqueeze(dim=1)
                     volume_embedding = self.image_model(input_image)
+                    if self.cfg.MODEL.DROP_MOD:
+                        if random.random() < 0.1:
+                            volume_embedding[:] = 0
+
+                        # fig = plt.figure()
+                        # ax = fig.gca(projection='3d')
+                        # voxels = volume_morph[i, 2, :, :, :] != 0
+                        # colors = np.empty(voxels.shape, dtype=object)
+                        # colors[volume_morph[i, 0, :, :, :] > 0] = 'red'
+                        # colors[volume_morph[i, 1, :, :, :] > 0] = 'blue'
+                        # ax.voxels(voxels, facecolors=colors)
+                        # plt.show()
+
+                        volume_morph[i, 0, :, :, :] = patch_rand_drop(volume_morph[i, 0, :, :, :].unsqueeze(dim=0))
+                        volume_morph[i, 1, :, :, :] = patch_rand_drop(volume_morph[i, 1, :, :, :].unsqueeze(dim=0))
+                        volume_morph[i, 2, :, :, :] = volume_morph[i, 0, :, :, :] + volume_morph[i, 1, :, :, :]
+
+                        # fig = plt.figure()
+                        # ax = fig.gca(projection='3d')
+                        # voxels = volume_morph[i, 2, :, :, :] != 0
+                        # colors = np.empty(voxels.shape, dtype=object)
+                        # colors[volume_morph[i, 0, :, :, :] > 0] = 'red'
+                        # colors[volume_morph[i, 1, :, :, :] > 0] = 'blue'
+                        # ax.voxels(voxels, facecolors=colors)
+                        # plt.show()
+
                     volume_embedding_list.append(volume_embedding)
                 volume_embedding = torch.cat(volume_embedding_list, dim=0)
                 if self.cfg.MODEL.EMBED_REDUCTION is not None:
                     return volume_morph.contiguous().to(self.device, non_blocking=True), volume_embedding
                 if embed_dim < volume_embedding.shape[1]:
                     volume_embedding = pca_emb(volume_embedding, dim=volume_embedding.shape[1],
-                                           n_components=embed_dim).to(self.device, non_blocking=True)
+                                               n_components=embed_dim).to(self.device, non_blocking=True)
                 if self.cfg.MODEL.MASK_EMBED:
-                    mask = einops.repeat(volume_morph[:, -1, :, :, :], 'b d h w -> b k d h w', k=embed_dim).to(self.device, non_blocking=True)
+                    mask = einops.repeat(volume_morph[:, -1, :, :, :], 'b d h w -> b k d h w', k=embed_dim).to(
+                        self.device, non_blocking=True)
                     volume_embedding = mask * volume_embedding
-                    volume_input = torch.cat((volume_morph[:, 0:2, :,:,:].to(self.device, non_blocking=True), volume_embedding), dim=1)
+                    volume_input = torch.cat(
+                        (volume_morph[:, 0:2, :, :, :].to(self.device, non_blocking=True), volume_embedding), dim=1)
                 else:
                     volume_input = torch.cat((volume_morph.to(self.device, non_blocking=True), volume_embedding), dim=1)
         else:
@@ -670,4 +760,3 @@ class Trainer(object):
             resize = torch.nn.Upsample(size=self.cfg.MODEL.MORPH_INPUT_SIZE)
             volume_input = resize(volume_input)
         return volume_input, 0
-

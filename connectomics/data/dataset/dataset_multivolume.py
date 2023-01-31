@@ -50,6 +50,7 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
         self.kwargs = kwargs
         self.mode = mode
         self.volume_path = volume_path
+        self.volume_path.sort()
         self.label_path = label_path
         self.volume_done = []
         self.volume_sample = None
@@ -71,7 +72,10 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
             if len(self.volume_done) == len(self.volume_path):
                 self.volume_done = []
         volume_rest = list(set(self.volume_path) - set(self.volume_done))
-        self.volume_sample = volume_rest[int(np.floor(random.random() * len(volume_rest)))]
+        if self.mode == 'train':
+            self.volume_sample = volume_rest[int(np.floor(random.random() * len(volume_rest)))]
+        else:
+            self.volume_sample = volume_rest[0]
         ## when the dataset is not complete
         block_index = self.volume_sample.split('/')[-1].split('.')[0]
         img_volume_path = os.path.join(self.block_image_path, block_index)

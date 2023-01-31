@@ -1,7 +1,7 @@
 # learn dense 3d image embedding with V-net
 MODEL:
-  INPUT_SIZE: [ 31, 161, 161 ]
-  OUTPUT_SIZE: [ 31, 161, 161 ]
+  INPUT_SIZE: [ 17, 129, 129 ]
+  OUTPUT_SIZE: [ 17, 129, 129 ]
   ARCHITECTURE: unet_3d
   BLOCK_TYPE: residual_se
   FILTERS: [32, 64, 96, 128, 160]
@@ -9,19 +9,23 @@ MODEL:
   TARGET_OPT: ["e"]
   LOSS_OPTION:
     [[ "DiscriminativeLoss", "ConnectionLoss" ]]
-  LOSS_WEIGHT: [[ 1.0, 0.1 ]]
+  LOSS_WEIGHT: [[ 1.0, 1.0 ]]
   WEIGHT_OPT: [[ "0", "0" ]]
   OUTPUT_ACT: [[ "none",  "none" ]]
 MONITOR:
   ITERATION_NUM: [20, 200]
 SOLVER:
-  LR_SCHEDULER_NAME: "MultiStepLR"
-  NAME: Adam
-  BASE_LR: 1e-03
-  STEPS: (250000, 500000)
+  LR_SCHEDULER_NAME: "WarmupMultiStepLR"
+  DECAY_LOSS_WEIGHT: True
+  NAME: AdamW
+  BASE_LR: 2e-03
+  WARMUP_FACTOR: 2e-5
+  WARMUP_ITERS: 50000
+  STEPS: (250000, 350000)
   ITERATION_SAVE: 8000
-  ITERATION_TOTAL: 2000000
+  ITERATION_TOTAL: 500000
   ITERATION_VAL: 4000
+  SAMPLES_PER_BATCH: 4 # PER GPU
 DATASET:
   CONNECTOR_DATSET: True
   IMAGE_NAME:
@@ -31,6 +35,7 @@ DATASET:
   DISTRIBUTED: True
 INFERENCE:
   OUTPUT_ACT: ["none"]
+  SAMPLES_PER_BATCH: 4 # per gpu
 AUGMENTOR:
   SMOOTH: False
   MISSINGPARTS:

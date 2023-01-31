@@ -71,10 +71,14 @@ class ConnectorDataset(torch.utils.data.Dataset):
         self.model_input_size = model_input_size
         self.connector_path = connector_path
         self.volume = volume
+        if self.mode == 'test':
+            self.record_path = self.connector_path.replace('30_percent_test_3000', '30_percent_test_3000_reformat')
+            self.test_sample_list = pd.read_csv(self.record_path, header=None)
         self.connector_list = pd.read_csv(self.connector_path, header=None)
         self.connector_num = len(self.connector_list)
         self.sample_num_a = len(self.connector_list)
         self.label = None
+        self.make_test_data = False
         self.relabel = relabel
         self.valid_mask = None
         if isinstance(augmentor, dict):
@@ -168,16 +172,20 @@ class ConnectorDataset(torch.utils.data.Dataset):
             if not self.morphology_dataset:
                 return self._connector_to_volume_sample(connector, morphology=self.morphology_dataset)
             else:
-                _ = self.get_test_samples(connector)
-                pos = {'pos': [0, 0, 0, 0],
-                            'seg_start': 0,
-                            'seg_positive': 0,
-                            'seg_target_relabeled': [0],
-                            'seg_negative': [0]}
-                out_volume = np.zeros(self.model_input_size).astype(np.float32)
-                out_volume = np.expand_dims(out_volume, 0)
-                out_label = np.zeros(self.model_input_size)
-                return pos, out_volume, out_label, 0, [0]
+                if self.make_test_data:
+                    _ = self.make_test_samples(connector)
+                    pos = {'pos': [0, 0, 0, 0],
+                                'seg_start': 0,
+                                'seg_positive': 0,
+                                'seg_target_relabeled': [0],
+                                'seg_negative': [0]}
+                    out_volume = np.zeros(self.model_input_size).astype(np.float32)
+                    out_volume = np.expand_dims(out_volume, 0)
+                    out_label = np.zeros(self.model_input_size)
+                    return pos, out_volume, out_label, 0, [0]
+                else:
+                    connector = self.test_sample_list.iloc[index]
+                    return self.get_test_sample(connector)
                 # return self._connector_to_test_sample(connector, morphology=self.morphology_dataset)
 
     def _crop_with_pos(self, pos, vol_size):
@@ -473,11 +481,11 @@ class ConnectorDataset(torch.utils.data.Dataset):
             out_label = morph_list
         return pos, out_volume, out_label, seg_start, candidates
 
-    def _connector_to_test_sample(self, connector, morphology=True):
+    def get_test_sample(self, connector, morphology=True):
         cord = connector[2][1:-1].split()
         seg_start = connector[0]
         seg_candidate = connector[1]
-        pos, out_volume = self._crop_with_pos([0, cord[0], cord[1], cord[2]], self.sample_volume_size)
+        pos, out_volume = self._crop_with_pos([int(cord[0]), int(cord[1]), int(cord[2]), int(cord[3])], self.sample_volume_size)
         out_label = crop_volume(self.vol_ffn1, self.sample_volume_size, pos[1:])
         out_volume = np.expand_dims(out_volume, 0)
         out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
@@ -486,12 +494,11 @@ class ConnectorDataset(torch.utils.data.Dataset):
             seg_0_morph = np.expand_dims(np.array(out_label == seg_start), 0)
             seg_1_morph = np.expand_dims(np.array(out_label == seg_candidate), 0)
             seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
-            morph_input = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
+            out_volume = np.concatenate((out_volume, seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
                                           seg_combined_morph.astype(np.float32)))
-            out_label = morph_input
-        return pos, out_volume, out_label, seg_start, [seg_candidate]
+        return pos, out_volume, out_label, connector[3], [seg_start, seg_candidate]
 
-    def get_test_samples(self, connector):
+    def make_test_samples(self, connector):
         self.record_path = self.connector_path.replace('30_percent_test_3000', '30_percent_test_3000_reformat')
         cord = connector[2][1:-1].split()
         cord_start_offset = np.asarray(connector[3][1:-1].split(), dtype=np.float32) - np.asarray(cord,

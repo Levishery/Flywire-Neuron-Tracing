@@ -307,6 +307,14 @@ def stat_neuron_connector():
     average_connector = sum(connector_num) / valid_neuron_num
     print(average_connector)
 
+def plot():
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/wo-ft-55400/block_result.csv'
+    csv_list = pd.read_csv(path, header=None)
+    list1 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55400/block_result.csv'
+    csv_list = pd.read_csv(path, header=None)
+    list2 = csv_list[2]
+    plt.boxplot([list1, list2])
 
 def delete_far():
     connector_path = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_vali/connector_14_7_167.csv'
