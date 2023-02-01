@@ -660,14 +660,14 @@ class Trainer(object):
                     self.dataloader = build_dataloader(self.cfg, None, mode, dataset=self.dataset.dataset)
                     self.dataloader = iter(self.dataloader)
                     rec, acc = self.test_embededge(visualize_csv_path)
-                    rec_list.append(rec)
-                    acc_list.append(acc)
+                    rec_list.append(rec.item())
+                    acc_list.append(acc.item())
                     row = pd.DataFrame(
                         [{'block_name': block_name, 'recall': rec.item(), 'accuracy': acc.item()}])
                     row.to_csv(result_path, mode='a', header=False, index=False)
             row = pd.DataFrame(
                 [{'block_name': 'average', 'recall': np.mean(np.array(rec_list)),
-                  'accuracy': np.mean(np.array(acc_list))}])
+                  'accuracy': np.mean(np.asarray(acc_list))}])
             row.to_csv(result_path, mode='a', header=False, index=False)
             return
 
@@ -715,7 +715,7 @@ class Trainer(object):
                     volume_embedding = self.image_model(input_image)
                     if self.cfg.MODEL.DROP_MOD:
                         if random.random() < 0.1:
-                            volume_embedding[:] = 0
+                            volume_embedding[:] = torch.mean(volume_embedding)
 
                         # fig = plt.figure()
                         # ax = fig.gca(projection='3d')

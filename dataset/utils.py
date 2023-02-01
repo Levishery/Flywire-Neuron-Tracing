@@ -31,9 +31,9 @@ def xpblock_to_fafb(z_block, y_block, x_block, z_coo=0, y_coo=0, x_coo=0):
     z_block:xp集群点做所在块儿的z轴序号
     y_block:xp集群点做所在块儿的y轴序号
     x_clock:xp集群点做所在块儿的x轴序号
-    z_coo:xp集群点所在块内的z轴坐标
-    y_coo:xp集群点所在块内的y轴坐标
-    x_coo:xp集群点所在块内的x轴坐标
+    z_coo:xp集群点所在块内的z轴坐标 (29-54)
+    y_coo:xp集群点所在块内的y轴坐标 (0-1735)
+    x_coo:xp集群点所在块内的x轴坐标 (0-1735)
 
     '''
 
