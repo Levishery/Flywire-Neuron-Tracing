@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.sparse as sparse
 import h5py
+import tifffile as tf
 from scipy import ndimage
 
 __all__ = [
@@ -525,3 +526,25 @@ def emb2rgb(x_emb):
     new_emb = pca.fit_transform(x_emb)
     new_emb = new_emb.reshape(shape[-2], shape[-1], 3)
     return new_emb
+
+def emb2rgb_dim5(x_emb):
+    x_emb = x_emb.squeeze(0)
+    x_emb = np.array(x_emb.cpu())
+    shape = x_emb.shape
+    pca = PCA(n_components=3)
+    x_emb = np.transpose(x_emb, [1, 2, 3, 0])
+    x_emb = x_emb.reshape(-1, 16)
+    new_emb = pca.fit_transform(x_emb)
+    new_emb = new_emb.reshape(shape[-3], shape[-2], shape[-1], 3)
+    return new_emb
+
+def visualize(embedding, volume, index, mask=True):
+    show = embedding[index, 3:, :, :, :].unsqueeze(0)
+    mask = np.asarray(embedding[index, 2, :, :, :].clone().detach().cpu())
+    x = np.asarray(emb2rgb_dim5(show))
+    y = (x - x.min()) / (x.max() - x.min()) * 240
+    tf.imsave('/braindat/lab/liusl/flywire/block_data/v2/visualize/embedding.tif', y.astype(np.uint8))
+    x = np.asarray(volume[index, 0, :, :, :].clone().detach().cpu())
+    x = (x - x.min()) / (x.max() - x.min()) * 240
+    x = x*mask*0.3 + x*0.7
+    tf.imsave('/braindat/lab/liusl/flywire/block_data/v2/visualize/volume.tif', x.astype(np.uint8))

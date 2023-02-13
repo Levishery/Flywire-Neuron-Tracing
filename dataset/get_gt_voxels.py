@@ -9,6 +9,7 @@ from cilog import create_logger
 from cloudvolume import CloudVolume
 from flywire2fafbffn1_main import prune_cell_body_fiber
 import os
+import time
 import argparse
 from utils import *
 
@@ -16,6 +17,8 @@ from utils import *
 def get_args():
     parser = argparse.ArgumentParser(description="Get GT voxel blocks for one neuron.")
     parser.add_argument('--neuron_id', type=str, default='720575940630120901',
+                        help='neuron_id to be download')
+    parser.add_argument('--block_id', type=str, default='connector_23_7_58',
                         help='neuron_id to be download')
     args = parser.parse_args()
     return args
@@ -64,7 +67,9 @@ def get_one_block():
     create_logger(name='l1', file='/braindat/lab/liusl/flywire/block_data/get_test_flywire_gt.log', sub_print=True)
     vol = CloudVolume('graphene://https://prodv1.flywire-daf.com/segmentation/1.0/fly_v31', use_https=True, mip=0,
                       secrets='5814c407f6cca6b2c1e50f5f99e6a555')
-    block_name = 'connector_23_7_58'
+    args = get_args()
+    block_name = args.block_id
+    # block_name = 'connector_23_7_58'
     [block_x, block_y, block_z] = block_name.split('_')[1:]
     [block_x, block_y, block_z] = [int(block_x), int(block_y), int(block_z)]
     points = [xpblock_to_fafb(block_z, block_y, block_x, 29, 0, 0),
@@ -83,18 +88,33 @@ def get_one_block():
     root_ids = fafbseg.flywire.supervoxels_to_roots(supervoxel_ids)
     proofread = fafbseg.flywire.is_proofread(root_ids)
     block = np.zeros([1738, 1738, 28], dtype=np.int64)
-    for i in tqdm(range(len(supervoxel_ids))):
+    unique_root_ids = np.unique(root_ids)
+    num_root_id = len(unique_root_ids)
+    proofread = fafbseg.flywire.is_proofread(unique_root_ids)
+    for i in tqdm(range(num_root_id)):
         if proofread[i]:
-            neuron_voxels_block = np.asarray(np.where(flywire_block == supervoxel_ids[i]))[:-1, :].transpose(1, 0)
+            supervoxels = supervoxel_ids[np.where(root_ids==unique_root_ids[i])]
+            neuron_voxels_block = []
+            for k in range(len(supervoxels)):
+                neuron_voxels_block.append(np.asarray(np.where(flywire_block == supervoxels[k]))[:-1, :].transpose(1, 0))
+            neuron_voxels_block = np.concatenate(neuron_voxels_block, axis=0)
             neuron_voxels_flywire = neuron_voxels_block * [4, 4, 1] + [bbox[0], bbox[2], bbox[4]]
-            neuron_voxels_fafbv14 = navis.xform_brain(neuron_voxels_flywire, target='FAFB14raw', source='FLYWIREraw')
+            try:
+                neuron_voxels_fafbv14 = navis.xform_brain(neuron_voxels_flywire, target='FAFB14raw', source='FLYWIREraw')
+            except:
+                time.sleep(60)
+                try:
+                    neuron_voxels_fafbv14 = navis.xform_brain(neuron_voxels_flywire, target='FAFB14raw',
+                                                          source='FLYWIREraw')
+                except:
+                    continue
             # to prevent out-of-bound, clip the coordinate to a one voxel boundary
             neuron_voxels_block = (neuron_voxels_fafbv14 - points[0]) * [0.25, 0.25, 1] + [1, 1, 1]
             neuron_voxels_block = np.concatenate([np.clip(np.expand_dims(neuron_voxels_block[:, 0], axis=1), 0, 1737),
                                                   np.clip(np.expand_dims(neuron_voxels_block[:, 1], axis=1), 0, 1737),
                                                   np.clip(np.expand_dims(neuron_voxels_block[:, 2], axis=1), 0, 27)],
                                                  axis=1).astype(int)
-            block[neuron_voxels_block] = root_ids[i]
+            block[neuron_voxels_block[:,0], neuron_voxels_block[:,1], neuron_voxels_block[:,2]] = unique_root_ids[i]
     block = block[1:-1, 1:-1, 1:-1]
     with open('/braindat/lab/liusl/flywire/block_data/test_flywire_gt/%s.npy' % block_name, 'wb') as f:
         np.save(f, block)

@@ -8,6 +8,7 @@ import os
 import time
 import math
 import GPUtil
+from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import numpy as np
 from yacs.config import CfgNode
@@ -24,6 +25,7 @@ from cloudvolume import CloudVolume
 from .solver import *
 from ..model import *
 from ..utils.monitor import build_monitor
+from ..utils.evaluate import visualize
 from torch.cuda.amp import autocast, GradScaler
 from ..data.augmentation import build_train_augmentor, TestAugmentor
 from ..data.dataset import build_dataloader, get_dataset, ConnectorDataset
@@ -348,6 +350,7 @@ class Trainer(object):
                 target = torch.tensor(np.expand_dims(np.asarray(sample.seg_start), axis=1))
                 ids = sample.candidates
                 volume, embedding = self.get_morph_input(volume)
+                # visualize(volume, sample.out_input, index=22, mask=True)
                 # prediction
                 with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
                     if self.cfg.MODEL.EMBED_REDUCTION is None:
@@ -693,6 +696,7 @@ class Trainer(object):
         z_fafb = 26 * z_block + 15 + z_coo
         # z_fafb = 26 * z_block + 30 + z_coo
         return (x_fafb, y_fafb, z_fafb)
+
 
     def get_morph_input(self, volume):
         volume_image = volume[:, 0, :, :, :]

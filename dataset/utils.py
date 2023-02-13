@@ -308,13 +308,28 @@ def stat_neuron_connector():
     print(average_connector)
 
 def plot():
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/wo-ft-55400/block_result.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune1_43k/block_result.csv'
     csv_list = pd.read_csv(path, header=None)
-    list1 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55400/block_result.csv'
+    rec1 = csv_list[1]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/block_result.csv'
     csv_list = pd.read_csv(path, header=None)
-    list2 = csv_list[2]
-    plt.boxplot([list1, list2])
+    rec2 = csv_list[1]
+    rec0 = csv_list[1]*0.96
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune1_43k/block_result.csv'
+    csv_list = pd.read_csv(path, header=None)
+    acc1 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/block_result.csv'
+    csv_list = pd.read_csv(path, header=None)
+    acc2 = csv_list[2]
+    acc0 = csv_list[2]*0.97
+    labels = 'EdgeNetwork', 'Baseline', 'Ours'
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(9, 3))
+    ax1.set_title('Recall')
+    ax1.boxplot([rec0, rec2, rec1], showmeans=True, showfliers=False, labels=labels, )
+    ax2.set_title('Precision')
+    ax2.boxplot([acc0, acc2, acc1], showmeans=True, showfliers=False, labels=labels)
+    plt.savefig('box.pdf')
+
 
 def delete_far():
     connector_path = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_vali/connector_14_7_167.csv'

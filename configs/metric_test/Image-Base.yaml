@@ -1,0 +1,49 @@
+# All other configurations are set by default. If you want to add new config options,
+# please modify ../connectomics/config/defaults.py
+SYSTEM:
+  NUM_GPUS: 1
+  NUM_CPUS: 4
+MODEL:
+  INPUT_SIZE: [17, 257, 257]
+  OUTPUT_SIZE: [17, 257, 257]
+  IN_PLANES: 1
+  OUT_PLANES: 3
+  TARGET_OPT: ["2"] # '0': binary mask; '1': synaptic polarity; '2': affinity; '3': small object mask;
+  # '4': instance boundary mask '5': distance transform (instance) '6': distance transform (semantic);
+  # '9': generic semantic segmentation
+  LABEL_EROSION: 1
+  LOSS_OPTION: [["WeightedBCEWithLogitsLoss", "DiceLoss"]]
+  LOSS_WEIGHT: [[1.0, 0.5]]
+  WEIGHT_OPT: [["1", "0"]]
+  OUTPUT_ACT: [["none", "sigmoid"]]
+  NORM_MODE: sync_bn
+DATASET:
+  IMAGE_NAME: train_image.tif
+  LABEL_NAME: train_label.tif
+  INPUT_PATH: /data12T/janechen/SNEMI3D/ # or your own dataset path
+  OUTPUT_PATH: /data12T/janechen/SNEMI3D/
+  PAD_SIZE: [4, 64, 64]
+SOLVER:
+  LR_SCHEDULER_NAME: "MultiStepLR"
+  NAME: Adam
+  BASE_LR: 1e-04
+  STEPS: (100000, 150000)
+  ITERATION_STEP: 1
+  ITERATION_SAVE: 5000
+  ITERATION_TOTAL: 200000
+  SAMPLES_PER_BATCH: 2 # PER GPU
+MONITOR:
+  ITERATION_NUM: [20, 200]
+INFERENCE:
+  INPUT_SIZE: [17, 257, 257]
+  OUTPUT_SIZE: [17, 257, 257]
+  OUTPUT_ACT: ["sigmoid"]
+  IMAGE_NAME: test_input.tif # or path to your test images
+  OUTPUT_PATH: /data12T/janechen/SNEMI3D/test
+  OUTPUT_NAME: result.tif
+  PAD_SIZE: [0, 0, 0]
+  UNPAD: False
+  AUG_MODE: min
+  AUG_NUM: 4
+  STRIDE: [18, 32, 32]
+  SAMPLES_PER_BATCH: 8 # per gpu

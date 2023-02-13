@@ -72,7 +72,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
         self.connector_path = connector_path
         self.volume = volume
         if self.mode == 'test':
-            self.record_path = self.connector_path.replace('30_percent_test_3000', '30_percent_test_3000_reformat')
+            self.record_path = self.connector_path.replace('test_3000', 'test_3000_reformat')
             self.test_sample_list = pd.read_csv(self.record_path, header=None)
         self.connector_list = pd.read_csv(self.connector_path, header=None)
         self.connector_num = len(self.connector_list)
