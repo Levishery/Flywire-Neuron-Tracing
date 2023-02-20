@@ -9,6 +9,16 @@ import signal
 import shutil
 from PIL import Image
 
+import argparse
+
+
+def get_args():
+    parser = argparse.ArgumentParser(description="Get GT voxel blocks for one neuron.")
+    parser.add_argument('--block_id', type=str, default='None',
+                        help='neuron_id to be download')
+    args = parser.parse_args()
+    return args
+
 
 def xpblock_to_fafb(z_block, y_block, x_block, z_coo, y_coo, x_coo):
     '''
@@ -96,12 +106,12 @@ def get_volume(start_x,end_x, start_y,end_y, start_z,end_z, source):
 
 
 def download():
+    args = get_args()
+    block_name = args.block_id
     fafb_v14 = cloudvolume.CloudVolume('https://storage.googleapis.com/neuroglancer-fafb-data/fafb_v14/fafb_v14_orig/',
                                        mip=2, progress=True)
-    df = pd.read_csv('/braindat/lab/liusl/flywire/block_data/30_percent.csv')
-    for i in df.index:
-        if i>4000: break
-        file_name = df['block'][i]
+    if block_name != 'None':
+        file_name = block_name
         folder_name = file_name.split('.')[0]
         if not os.path.exists(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14', folder_name)):
             [block_x, block_y, block_z] = file_name.split('_')[1:]
@@ -111,17 +121,42 @@ def download():
             (start_x, start_y, start_z) = xpblock_to_fafb(block_z, block_y, block_x, 29, 0, 0)
             (end_x, end_y, end_z) = xpblock_to_fafb(block_z, block_y, block_x, 54, 1735, 1735)
             (start_x, start_y, start_z) = (start_x / 4 - 156, start_y / 4 - 156, start_z - 29)
-            (end_x, end_y, end_z) = (end_x/4+156+1, end_y/4+156+1, end_z+29+1)
+            (end_x, end_y, end_z) = (end_x / 4 + 156 + 1, end_y / 4 + 156 + 1, end_z + 29 + 1)
             print('begin dowload: ', file_name)
             try:
                 volume = fafb_v14[start_x:end_x, start_y:end_y, start_z:end_z]
             except:
                 print('fail to download', file_name)
-                continue
             os.makedirs(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14', folder_name))
             for i in range(84):
                 im = Image.fromarray(volume[:, :, i, 0])
-                im.save(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14', os.path.join(folder_name, str(i).zfill(4)+'.png')))
+                im.save(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14',
+                                     os.path.join(folder_name, str(i).zfill(4) + '.png')))
+    else:
+        df = pd.read_csv('/braindat/lab/liusl/flywire/block_data/30_percent.csv')
+        for i in df.index:
+            if i>4000: break
+            file_name = df['block'][i]
+            folder_name = file_name.split('.')[0]
+            if not os.path.exists(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14', folder_name)):
+                [block_x, block_y, block_z] = file_name.split('_')[1:]
+                block_x = int(block_x)
+                block_y = int(block_y)
+                block_z = int(block_z.split('.')[0])
+                (start_x, start_y, start_z) = xpblock_to_fafb(block_z, block_y, block_x, 29, 0, 0)
+                (end_x, end_y, end_z) = xpblock_to_fafb(block_z, block_y, block_x, 54, 1735, 1735)
+                (start_x, start_y, start_z) = (start_x / 4 - 156, start_y / 4 - 156, start_z - 29)
+                (end_x, end_y, end_z) = (end_x/4+156+1, end_y/4+156+1, end_z+29+1)
+                print('begin dowload: ', file_name)
+                try:
+                    volume = fafb_v14[start_x:end_x, start_y:end_y, start_z:end_z]
+                except:
+                    print('fail to download', file_name)
+                    continue
+                os.makedirs(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14', folder_name))
+                for i in range(84):
+                    im = Image.fromarray(volume[:, :, i, 0])
+                    im.save(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14', os.path.join(folder_name, str(i).zfill(4)+'.png')))
 
 
 def zfill_folders(path):

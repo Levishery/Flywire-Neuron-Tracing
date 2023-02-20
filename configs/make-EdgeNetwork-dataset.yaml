@@ -34,7 +34,7 @@ DATASET:
   MORPHOLOGY_DATSET: True
   IMAGE_NAME:
   LABEL_NAME:
-  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/morph-EdgeNetwork-connector
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True
 INFERENCE:

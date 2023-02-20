@@ -5,6 +5,7 @@ import os
 import shutil
 from tqdm import tqdm
 import random
+import matplotlib.ticker as ticker
 from matplotlib import pyplot as plt
 import navis
 
@@ -308,27 +309,58 @@ def stat_neuron_connector():
     print(average_connector)
 
 def plot():
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune1_43k/block_result.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/block_result.csv'
     csv_list = pd.read_csv(path, header=None)
     rec1 = csv_list[1]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/block_result.csv'
-    csv_list = pd.read_csv(path, header=None)
-    rec2 = csv_list[1]
-    rec0 = csv_list[1]*0.96
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune1_43k/block_result.csv'
-    csv_list = pd.read_csv(path, header=None)
     acc1 = csv_list[2]
     path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/block_result.csv'
     csv_list = pd.read_csv(path, header=None)
+    rec2 = csv_list[1]
     acc2 = csv_list[2]
-    acc0 = csv_list[2]*0.97
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/EdgeNEtwork/block_result_02.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec0 = csv_list[1]
+    acc0 = csv_list[2]
     labels = 'EdgeNetwork', 'Baseline', 'Ours'
     fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(9, 3))
     ax1.set_title('Recall')
     ax1.boxplot([rec0, rec2, rec1], showmeans=True, showfliers=False, labels=labels, )
+    ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.03))
+    ax1.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
+    # show the ytick positions, as a reference
+
     ax2.set_title('Precision')
     ax2.boxplot([acc0, acc2, acc1], showmeans=True, showfliers=False, labels=labels)
+    ax2.yaxis.set_major_locator(ticker.MultipleLocator(0.02))
+    ax2.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
+
+    ax1.text(1.4, 0.87, str(np.around(np.mean(rec0), decimals=3)), color="green", fontsize=10, ha='center')
+    ax1.text(2.27, 0.893, str(np.around(np.mean(rec2), decimals=3)), color="green", fontsize=10, ha='center')
+    ax1.text(3.27, 0.908, str(np.around(np.mean(rec1), decimals=3)), color="green", fontsize=10, ha='center')
+
+    ax2.text(1.4, 0.923, str(np.around(np.mean(acc0), decimals=3))+'0', color="green", fontsize=10, ha='center')
+    ax2.text(2.27, 0.947, str(np.around(np.mean(acc2), decimals=3)), color="green", fontsize=10, ha='center')
+    ax2.text(3.27, 0.949, str(np.around(np.mean(acc1), decimals=3)), color="green", fontsize=10, ha='center')
+
     plt.savefig('box.pdf')
+
+
+def set_new_threshold():
+    pred_path = '/braindat/lab/liusl/flywire/experiment/test-3k/EdgeNEtwork/predictions'
+    csv_path = '/braindat/lab/liusl/flywire/experiment/test-3k/EdgeNEtwork/block_result_02.csv'
+    preds = os.listdir(pred_path)
+    for pred in tqdm(preds):
+        csv_list = pd.read_csv(os.path.join(pred_path, pred), header=None)
+        gt = np.asarray(csv_list[2])
+        prediction = np.asarray(csv_list[4])
+        TP = sum(np.logical_and(prediction > 0.2, gt == 1))
+        FP = sum(np.logical_and(prediction > 0.2, gt == 0))
+        FN = sum(np.logical_and(prediction < 0.2, gt == 1))
+        recall = TP / (TP + FN)
+        accuracy = TP / (TP + FP)
+        row = pd.DataFrame(
+            [{'block_name': pred, 'recall': recall, 'accuracy': accuracy}])
+        row.to_csv(csv_path, mode='a', header=False, index=False)
 
 
 def delete_far():

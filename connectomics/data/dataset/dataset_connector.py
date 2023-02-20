@@ -5,6 +5,7 @@ import pandas as pd
 import time
 import random
 import cc3d
+import cv2
 from cloudvolume import CloudVolume
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -483,9 +484,12 @@ class ConnectorDataset(torch.utils.data.Dataset):
 
     def get_test_sample(self, connector, morphology=True):
         cord = connector[2][1:-1].split()
+        cord = [int(cord[0]), int(cord[1]), int(cord[2]), int(cord[3])]
+        cord = np.asarray(cord) + np.asarray([0, 8-self.sample_volume_size[0] / 2, 64-self.sample_volume_size[1]/2, 64-self.sample_volume_size[1]/2])
+        cord = [int(cord[0]), np.clip(int(cord[1]), 0, 58-self.sample_volume_size[0]), int(cord[2]), int(cord[3])]
         seg_start = connector[0]
         seg_candidate = connector[1]
-        pos, out_volume = self._crop_with_pos([int(cord[0]), int(cord[1]), int(cord[2]), int(cord[3])], self.sample_volume_size)
+        pos, out_volume = self._crop_with_pos(cord, self.sample_volume_size)
         out_label = crop_volume(self.vol_ffn1, self.sample_volume_size, pos[1:])
         out_volume = np.expand_dims(out_volume, 0)
         out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
@@ -496,6 +500,22 @@ class ConnectorDataset(torch.utils.data.Dataset):
             seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
             out_volume = np.concatenate((out_volume, seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
                                           seg_combined_morph.astype(np.float32)))
+            # # for lyx
+            # if int(connector[3]) < 1:
+            #     out_morph = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
+            #                                  seg_combined_morph.astype(np.float32)))
+            #     fid = h5py.File(os.path.join('/braindat/lab/liuyixiong/block_dataset/negative', '%s.h5'%(str(seg_start) + '_' + str(seg_candidate))), 'w')
+            #     ds = fid.create_dataset('main', out_morph.shape, compression="gzip", dtype=out_morph.dtype)
+            #     ds[:] = out_morph
+            #     fid.close()
+            # if int(connector[3]) > 0:
+            #     out_morph = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
+            #                                  seg_combined_morph.astype(np.float32)))
+            #     fid = h5py.File(os.path.join('/braindat/lab/liuyixiong/block_dataset/positive', '%s.h5'%(str(seg_start) + '_' + str(seg_candidate))), 'w')
+            #     ds = fid.create_dataset('main', out_morph.shape, compression="gzip", dtype=out_morph.dtype)
+            #     ds[:] = out_morph
+            #     fid.close()
+
         return pos, out_volume, out_label, connector[3], [seg_start, seg_candidate]
 
     def make_test_samples(self, connector):

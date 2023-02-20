@@ -41,8 +41,6 @@ SOLVER:
 MONITOR:
   ITERATION_NUM: [20, 200]
 INFERENCE:
-  INPUT_SIZE: [ 16, 128, 128 ]
-  OUTPUT_SIZE: [ 16, 128, 128 ]
   OUTPUT_ACT: ["sigmoid"]
   IMAGE_NAME:  # or path to your test images
   OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
