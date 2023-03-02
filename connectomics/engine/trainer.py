@@ -11,6 +11,7 @@ import GPUtil
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 from yacs.config import CfgNode
 import einops
 import dill
@@ -30,8 +31,8 @@ from torch.cuda.amp import autocast, GradScaler
 from ..data.augmentation import build_train_augmentor, TestAugmentor
 from ..data.dataset import build_dataloader, get_dataset, ConnectorDataset
 from ..data.dataset.build import _get_file_list, _make_path_list
-from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking, pca_emb
-from ..data.utils import get_padsize, array_unpad, readvol, patch_rand_drop
+from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking, pca_emb, readh5
+from ..data.utils import get_padsize, array_unpad, readvol, patch_rand_drop, stat_biological_recall
 
 DEBUG = 0
 
@@ -105,7 +106,7 @@ class Trainer(object):
             if self.mode == 'train' and cfg.DATASET.VAL_IMAGE_NAME is not None:
                 self.val_loader = build_dataloader(
                     self.cfg, None, mode='val', rank=rank)
-        if self.cfg.DATASET.MORPHOLOGY_DATSET and self.cfg.MODEL.IN_PLANES > 3:
+        if self.cfg.DATASET.MORPHOLOGY_DATSET and self.cfg.MODEL.IN_PLANES > 4:
             assert cfg_image_model is not None
             self.cfg_image_model = cfg_image_model
             self.image_model = build_model(cfg_image_model, self.device, rank)
@@ -168,7 +169,7 @@ class Trainer(object):
                 if self.cfg.DATASET.MORPHOLOGY_DATSET:
                     if torch.cuda.is_available():
                         GPUtil.showUtilization(all=True)
-                    self.monitor.plot_3d(pred, target, volume, iter_total, name='train')
+                    # self.monitor.plot_3d(pred, target, volume, iter_total, name='train')
                 else:
                     self.monitor.visualize(
                         volume, target, pred, weight, iter_total)
@@ -418,6 +419,54 @@ class Trainer(object):
 
             self.test()
 
+    def test_biological(self):
+        volume = readh5(self.cfg.DATASET.IMAGE_NAME)
+        volume_ffn1 = readh5((self.cfg.DATASET.IMAGE_NAME).replace('connector', 'ffn'))
+        mapping = readh5(self.cfg.DATASET.LABEL_NAME, 'original')
+        edges = readh5((self.cfg.DATASET.LABEL_NAME).replace('mapping.h5', '.h5').replace('segmentationsfafb', 'fafb'))
+        csv_path = (self.cfg.DATASET.IMAGE_NAME).replace('.h5', '.csv')
+        result_csv_path = csv_path.replace('.csv', '_result.csv')
+
+        # get csv file
+        # for edge in tqdm(edges):
+        #     seg_start = mapping[edge[3] - 1]
+        #     seg_candidate = mapping[edge[4] - 1]
+        #     cord = np.asarray([edge[0], edge[1], edge[2]]) - np.asarray([8, 64, 64])
+        #     upper_bound = np.asarray([volume.shape[2], volume.shape[1], volume.shape[0]]) - np.asarray([16, 128, 128])
+        #     cord = [np.clip(cord[0], 0, upper_bound[0]), np.clip(cord[1], 0, upper_bound[1]), np.clip(cord[2], 0, upper_bound[2])]
+        #     row = pd.DataFrame(
+        #         [{'node0_segid': int(seg_start), 'node1_segid': int(seg_candidate), 'cord': cord, 'target': -1,
+        #           'prediction': -1}])
+        #     row.to_csv(csv_path, mode='a', header=False, index=False)
+        # stat_biological_recall(csv_path)
+
+        dataset = ConnectorDataset(connector_path=csv_path, volume=volume, vol_ffn1=volume_ffn1,
+                                   mode=self.mode,
+                                   iter_num=-1, model_input_size=self.cfg.MODEL.INPUT_SIZE,
+                                   sample_volume_size=self.cfg.MODEL.INPUT_SIZE)
+        self.dataloader = build_dataloader(self.cfg, self.augmentor, self.mode, dataset, self.rank)
+        self.dataloader = iter(self.dataloader)
+        start = time.perf_counter()
+        with torch.no_grad():
+            for i, sample in enumerate(self.dataloader):
+                print('progress: %d/%d batches, total time %.2fs' %
+                      (i + 1, len(self.dataloader), time.perf_counter() - start))
+
+                volume = sample.out_input
+                target = torch.tensor(np.expand_dims(np.asarray(sample.seg_start), axis=1))
+                ids = sample.candidates
+                volume, embedding = self.get_morph_input(volume)
+                with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
+                    volume = volume.contiguous().to(self.device, non_blocking=True)
+                    pred = self.model(volume)
+                for idx in range(len(target)):
+                    row = pd.DataFrame(
+                        [{'node0_segid': int(ids[idx][0]), 'node1_segid': int(ids[idx][1]),
+                          'target': int(target[idx] == 1), 'value': pred.detach().cpu()[idx].item()}])
+                    row.to_csv(result_csv_path, mode='a', header=False, index=False)
+
+
+
     # -----------------------------------------------------------------------------
     # Misc functions
     # -----------------------------------------------------------------------------
@@ -649,6 +698,8 @@ class Trainer(object):
                 block_name = self.dataset.dataset.connector_path.split('/')[-1]
                 csv_path = self.dataset.dataset.connector_path.replace('30_percent_test_3000',
                                                                        '30_percent_test_3000_reformat')
+                csv_path = self.dataset.dataset.connector_path.replace('30_percent_train_1000',
+                                                                       '30_percent_train_1000_reformat')
                 if not os.path.exists(csv_path):
                     print('#W Test data do not exist, extracting.')
                     self.dataset.dataset.make_test_data = True
@@ -701,7 +752,7 @@ class Trainer(object):
     def get_morph_input(self, volume):
         volume_image = volume[:, 0, :, :, :]
         volume_morph = volume[:, 1:, :, :, :]
-        if self.cfg.MODEL.IN_PLANES > 3:
+        if self.cfg.MODEL.IN_PLANES > 4:
             if self.cfg.MODEL.MASK_EMBED:
                 morph_dim = 2
             else:
@@ -758,6 +809,8 @@ class Trainer(object):
                         (volume_morph[:, 0:2, :, :, :].to(self.device, non_blocking=True), volume_embedding), dim=1)
                 else:
                     volume_input = torch.cat((volume_morph.to(self.device, non_blocking=True), volume_embedding), dim=1)
+        elif self.cfg.MODEL.IN_PLANES == 4:
+            volume_input = volume
         else:
             volume_input = volume_morph
         if self.cfg.MODEL.MORPH_INPUT_SIZE is not None:

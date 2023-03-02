@@ -2,7 +2,7 @@ SYSTEM:
   NUM_GPUS: 1
   NUM_CPUS: 2
 MODEL:
-  INPUT_SIZE: [ 16, 128, 128 ]
+  INPUT_SIZE: [ 17, 129, 129 ]
   ARCHITECTURE: EdgeNetwork
   POOLING_LAYER: True  # used in unet
   IN_PLANES: 19
@@ -16,8 +16,8 @@ MODEL:
   TARGET_OPT: ["0"]
   MIXED_PRECESION: True
   MASK_EMBED: False
-  IMAGE_MODEL_CFG: configs/test-neuron-swin-connector.yaml
-  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/fintune-final-ckpt/checkpoint_best.pth
+  IMAGE_MODEL_CFG: configs/test-Image-Unet-connector.yaml
+  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/fintune-final-ckpt-Unet/checkpoint_best.pth
   DROP_MOD: False
 MONITOR:
   ITERATION_NUM: [20, 200]
@@ -36,14 +36,12 @@ DATASET:
   DATA_CHUNK_ITER: 40
   CONNECTOR_DATSET: True
   MORPHOLOGY_DATSET: True
-  LABEL_NAME: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-600nm-18x52x52/testing/unknowns/segmentationsfafb_22_7_97-101_r1500mapping.h5
-  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
-  DO_MULTI_VOLUME: False
+  IMAGE_NAME:
+  LABEL_NAME:
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/morph-EmbedEdgeNetwork-connector
+  DO_MULTI_VOLUME: True
   DISTRIBUTED: True
 INFERENCE:
-  DO_SINGLY: True
-  IMAGE_NAME: /braindat/lab/liusl/flywire/block_data/neuroglancer/connector_22_7_97-101.h5
-  DO_BIOLOGICAL: True
   OUTPUT_ACT: ["none"]
   SAMPLES_PER_BATCH: 64 # per gpu
 AUGMENTOR:

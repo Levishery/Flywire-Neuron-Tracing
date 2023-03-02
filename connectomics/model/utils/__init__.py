@@ -1,5 +1,6 @@
 from .initialize import *
 from .misc import *
+from .pointnet_utils import *
 
 __all__ = [
     'model_init'
@@ -7,4 +8,7 @@ __all__ = [
     'get_functional_act',
     'get_norm',
     'SplitActivation',
+    'MLPHead',
+    'PointNetSetAbstractionMsg',
+    'PointNetSetAbstraction',
 ]

@@ -1,0 +1,66 @@
+# learn dense 3d image embedding with V-net
+MODEL:
+  INPUT_SIZE: [ 17, 129, 129 ]
+  OUTPUT_SIZE: [ 17, 129, 129 ]
+  ARCHITECTURE: unet_3d
+  BLOCK_TYPE: residual_se
+  FILTERS: [32, 64, 96, 128, 160]
+  ISOTROPY: [ False, True, True, True, True]
+  IN_PLANES: 1
+  OUT_PLANES: 16
+  TARGET_OPT: ["e"]
+  LOSS_OPTION:
+    [[ "DiscriminativeLoss", "ConnectionLoss" ]]
+  LOSS_WEIGHT: [[ 1.0, 1.0 ]]
+  WEIGHT_OPT: [[ "0", "0" ]]
+  OUTPUT_ACT: [[ "none",  "none" ]]
+MONITOR:
+  ITERATION_NUM: [20, 200]
+SOLVER:
+  LR_SCHEDULER_NAME: "WarmupMultiStepLR"
+  DECAY_LOSS_WEIGHT: True
+  NAME: AdamW
+  BASE_LR: 2e-03
+  WARMUP_FACTOR: 2e-5
+  WARMUP_ITERS: 50000
+  STEPS: (250000, 350000)
+  ITERATION_SAVE: 8000
+  ITERATION_TOTAL: 500000
+  ITERATION_VAL: 4000
+  SAMPLES_PER_BATCH: 1 # PER GPU
+DATASET:
+  CONNECTOR_DATSET: True
+  IMAGE_NAME:
+  LABEL_NAME:
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet-connector-test
+  DO_MULTI_VOLUME: True
+  DISTRIBUTED: True
+INFERENCE:
+  INPUT_SIZE: [ 17, 129, 129 ]
+  OUTPUT_SIZE: [ 17, 129, 129 ]
+  OUTPUT_ACT: ["none"]
+  SAMPLES_PER_BATCH: 4 # per gpu
+AUGMENTOR:
+  SMOOTH: False
+  MISSINGPARTS:
+    ENABLED: False
+  MISSINGSECTION:
+    ENABLED: False
+  CUTNOISE:
+    ENABLED: False
+  CUTBLUR:
+    ENABLED: False
+  ROTATE:
+    ENABLED: True
+  RESCALE:
+    ENABLED: True
+  FLIP:
+    ENABLED: True
+  ELASTIC:
+    ENABLED: False
+  GRAYSCALE:
+    ENABLED: False
+  MISALIGNMENT:
+    ENABLED: False
+  MOTIONBLUR:
+    ENABLED: False

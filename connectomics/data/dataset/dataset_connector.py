@@ -486,7 +486,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
         cord = connector[2][1:-1].split()
         cord = [int(cord[0]), int(cord[1]), int(cord[2]), int(cord[3])]
         cord = np.asarray(cord) + np.asarray([0, 8-self.sample_volume_size[0] / 2, 64-self.sample_volume_size[1]/2, 64-self.sample_volume_size[1]/2])
-        cord = [int(cord[0]), np.clip(int(cord[1]), 0, 58-self.sample_volume_size[0]), int(cord[2]), int(cord[3])]
+        cord = [int(cord[0]), np.clip(int(cord[1]), 0, self.volume[0].shape[0]-self.sample_volume_size[0]), int(cord[2]), int(cord[3])]
         seg_start = connector[0]
         seg_candidate = connector[1]
         pos, out_volume = self._crop_with_pos(cord, self.sample_volume_size)
@@ -519,8 +519,11 @@ class ConnectorDataset(torch.utils.data.Dataset):
         return pos, out_volume, out_label, connector[3], [seg_start, seg_candidate]
 
     def make_test_samples(self, connector):
+        num_negative = 4
         self.record_path = self.connector_path.replace('30_percent_test_3000', '30_percent_test_3000_reformat')
+        self.record_path = self.connector_path.replace('30_percent_train_1000', '30_percent_train_1000_reformat')
         cord = connector[2][1:-1].split()
+        cord_fafb = [float(cord[0]), float(cord[1]), float(cord[2])]
         cord_start_offset = np.asarray(connector[3][1:-1].split(), dtype=np.float32) - np.asarray(cord,
                                                                                                   dtype=np.float32)
         cord_start_offset = np.asarray([cord_start_offset[0] / 4, cord_start_offset[1] / 4, cord_start_offset[2]])
@@ -573,11 +576,12 @@ class ConnectorDataset(torch.utils.data.Dataset):
         # fixed number of seg_negative
         seg_negative = seg_negative[:20]
         row = pd.DataFrame(
-            [{'node0_segid': int(seg_start), 'node1_segid': int(seg_positive), 'cord': pos, 'target': 1, 'prediction': -1}])
+            [{'node0_segid': int(seg_start), 'node1_segid': int(seg_positive), 'cord': pos, 'target': 1, 'prediction': -1, 'cord_fafb': cord_fafb}])
         row.to_csv(self.record_path, mode='a', header=False, index=False)
-        row = pd.DataFrame(
-            [{'node0_segid': int(seg_start), 'node1_segid': int(seg_negative[0]), 'cord': pos, 'target': 0, 'prediction': -1}])
-        row.to_csv(self.record_path, mode='a', header=False, index=False)
+        for i in range(min(num_negative, len(seg_negative))):
+            row = pd.DataFrame(
+                [{'node0_segid': int(seg_start), 'node1_segid': int(seg_negative[i]), 'cord': pos, 'target': 0, 'prediction': -1, 'cord_fafb': cord_fafb}])
+            row.to_csv(self.record_path, mode='a', header=False, index=False)
 
         return None
 

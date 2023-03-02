@@ -8,10 +8,11 @@ import glob
 import numpy as np
 import imageio
 from scipy.ndimage import zoom
+import pandas as pd
 
 
 def readimg_as_vol(filename, drop_channel=True):
-    img_suf = filename[filename.rfind('.')+1:]
+    img_suf = filename[filename.rfind('.') + 1:]
     assert img_suf in ['png', 'tif']
     data = imageio.imread(filename)
     if drop_channel and data.ndim == 3:
@@ -27,10 +28,50 @@ def readh5(filename, dataset=None):
     return np.array(fid[dataset])
 
 
+def stat_biological_recall(potential_path):
+    # potential_path = '/braindat/lab/liusl/flywire/block_data/neuroglancer/connector_22_7_97-101.csv'
+    names = potential_path.split('.')[0].split('/')[-1]
+    name_prefix = names.split('_')[:-1]
+    name_prefix = name_prefix[0] + '_' + name_prefix[1] + '_' + name_prefix[2] + '_'
+    z_start = int(names.split('_')[-1].split('-')[0])
+    z_end = int(names.split('_')[-1].split('-')[1])
+    block_paths = [
+        '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/%s.csv' % (name_prefix + str(z_start)),
+        '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/%s.csv' % (
+                    name_prefix + str(z_start + 1)),
+        '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/%s.csv' % (
+                    name_prefix + str(z_start + 2)),
+        '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/%s.csv' % (
+                    name_prefix + str(z_start + 3)),
+        '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/%s.csv' % (
+                    name_prefix + str(z_start + 4))]
+
+    edges = pd.read_csv(potential_path, header=None)
+    total_positives = 0
+    hit = 0
+    for block_path in block_paths:
+        if os.path.exists(block_path):
+            samples = pd.read_csv(block_path, header=None)
+            positives_indexes = np.where(samples[3] == 1)
+            query = list(samples[0][list(positives_indexes[0])])
+            pos = list(samples[1][list(positives_indexes[0])])
+            for i in range(len(query)):
+                total_positives = total_positives + 1
+                potentials = list(edges[1][np.where(edges[0] == query[i])[0]])
+                if pos[i] in potentials:
+                    hit = hit + 1
+                    continue
+                potentials = list(edges[1][np.where(edges[0] == pos[i])[0]])
+                if query[i] in potentials:
+                    hit = hit + 1
+                    continue
+    print('bilogical edge recall: ', hit / total_positives)
+
+
 def readvol(filename, dataset=None):
     r"""Load a image volume in HDF5, TIFF or PNG formats.
     """
-    img_suf = filename[filename.rfind('.')+1:]
+    img_suf = filename[filename.rfind('.') + 1:]
     if img_suf in ['h5', 'hdf5']:
         data = readh5(filename, dataset)
     elif 'tif' in img_suf:
@@ -121,7 +162,7 @@ def create_json(ndim: int = 1, dtype: str = "uint8", data_path: str = "/path/to/
     metadata["ndim"] = ndim
     metadata["dtype"] = dtype
 
-    digits = int(math.log10(depth))+1
+    digits = int(math.log10(depth)) + 1
     metadata["image"] = [
         data_path + str(i).zfill(digits) + r"/{row}_{column}.png"
         for i in range(depth)]
@@ -139,6 +180,7 @@ def create_json(ndim: int = 1, dtype: str = "uint8", data_path: str = "/path/to/
 
     return metadata
 
+
 ####################################################################
 # tile to volume
 ####################################################################
@@ -149,9 +191,12 @@ def vast2Seg(seg):
     if seg.ndim == 2 or seg.shape[-1] == 1:
         return np.squeeze(seg)
     elif seg.ndim == 3:  # 1 rgb image
-        return seg[:, :, 0].astype(np.uint32)*65536 + seg[:, :, 1].astype(np.uint32)*256 + seg[:, :, 2].astype(np.uint32)
+        return seg[:, :, 0].astype(np.uint32) * 65536 + seg[:, :, 1].astype(np.uint32) * 256 + seg[:, :, 2].astype(
+            np.uint32)
     elif seg.ndim == 4:  # n rgb image
-        return seg[:, :, :, 0].astype(np.uint32)*65536 + seg[:, :, :, 1].astype(np.uint32)*256 + seg[:, :, :, 2].astype(np.uint32)
+        return seg[:, :, :, 0].astype(np.uint32) * 65536 + seg[:, :, :, 1].astype(np.uint32) * 256 + seg[:, :, :,
+                                                                                                     2].astype(
+            np.uint32)
 
 
 def tile2volume(tiles: List[str], coord: List[int], coord_m: List[int], tile_sz: int,
@@ -173,23 +218,23 @@ def tile2volume(tiles: List[str], coord: List[int], coord_m: List[int], tile_sz:
     z0o, z1o, y0o, y1o, x0o, x1o = coord  # region to crop
     z0m, z1m, y0m, y1m, x0m, x1m = coord_m  # tile boundary
 
-    bd = [max(-z0o, z0m), max(0, z1o-z1m), max(-y0o, y0m),
-          max(0, y1o-y1m), max(-x0o, x0m), max(0, x1o-x1m)]
+    bd = [max(-z0o, z0m), max(0, z1o - z1m), max(-y0o, y0m),
+          max(0, y1o - y1m), max(-x0o, x0m), max(0, x1o - x1m)]
     z0, y0, x0 = max(z0o, z0m), max(y0o, y0m), max(x0o, x0m)
     z1, y1, x1 = min(z1o, z1m), min(y1o, y1m), min(x1o, x1m)
 
-    result = background*np.ones((z1-z0, y1-y0, x1-x0), dt)
+    result = background * np.ones((z1 - z0, y1 - y0, x1 - x0), dt)
     c0 = x0 // tile_sz  # floor
-    c1 = (x1 + tile_sz-1) // tile_sz  # ceil
+    c1 = (x1 + tile_sz - 1) // tile_sz  # ceil
     r0 = y0 // tile_sz
-    r1 = (y1 + tile_sz-1) // tile_sz
+    r1 = (y1 + tile_sz - 1) // tile_sz
     for z in range(z0, z1):
         pattern = tiles[z]
         for row in range(r0, r1):
             for column in range(c0, c1):
                 if r'{row}_{column}' in pattern:
                     path = pattern.format(
-                        row=row+tile_st[0], column=column+tile_st[1])
+                        row=row + tile_st[0], column=column + tile_st[1])
                 else:
                     path = pattern
                 patch = readim(path, do_channel=True)
@@ -208,11 +253,13 @@ def tile2volume(tiles: List[str], coord: List[int], coord_m: List[int], tile_sz:
                     y0a = max(y0, yp0)
                     y1a = min(y1, yp1)
                     if do_im:  # image
-                        result[z-z0, y0a-y0:y1a-y0, x0a-x0:x1a -
-                               x0] = patch[y0a-yp0:y1a-yp0, x0a-xp0:x1a-xp0, 0]
+                        result[z - z0, y0a - y0:y1a - y0, x0a - x0:x1a -
+                                                                   x0] = patch[y0a - yp0:y1a - yp0, x0a - xp0:x1a - xp0,
+                                                                         0]
                     else:  # label
-                        result[z-z0, y0a-y0:y1a-y0, x0a-x0:x1a -
-                               x0] = vast2Seg(patch[y0a-yp0:y1a-yp0, x0a-xp0:x1a-xp0])
+                        result[z - z0, y0a - y0:y1a - y0, x0a - x0:x1a -
+                                                                   x0] = vast2Seg(
+                            patch[y0a - yp0:y1a - yp0, x0a - xp0:x1a - xp0])
 
     # For chunks touching the border of the large input volume, apply padding.
     if max(bd) > 0:

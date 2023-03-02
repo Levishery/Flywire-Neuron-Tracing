@@ -308,8 +308,25 @@ def stat_neuron_connector():
     average_connector = sum(connector_num) / valid_neuron_num
     print(average_connector)
 
+
+def get_box_plot_data(labels, bp):
+    rows_list = []
+
+    for i in range(len(labels)):
+        dict1 = {}
+        dict1['label'] = labels[i]
+        dict1['lower_whisker'] = bp['whiskers'][i*2].get_ydata()[1]
+        dict1['lower_quartile'] = bp['boxes'][i].get_ydata()[1]
+        dict1['median'] = bp['medians'][i].get_ydata()[1]
+        dict1['upper_quartile'] = bp['boxes'][i].get_ydata()[2]
+        dict1['upper_whisker'] = bp['whiskers'][(i*2)+1].get_ydata()[1]
+        rows_list.append(dict1)
+
+    return pd.DataFrame(rows_list)
+
+
 def plot():
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/block_result.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune1_43k/block_result.csv'
     csv_list = pd.read_csv(path, header=None)
     rec1 = csv_list[1]
     acc1 = csv_list[2]
@@ -317,50 +334,328 @@ def plot():
     csv_list = pd.read_csv(path, header=None)
     rec2 = csv_list[1]
     acc2 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/EdgeNEtwork/block_result_02.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/block_result.csv'
     csv_list = pd.read_csv(path, header=None)
     rec0 = csv_list[1]
     acc0 = csv_list[2]
-    labels = 'EdgeNetwork', 'Baseline', 'Ours'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/block_result.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec3 = csv_list[1]
+    acc3 = csv_list[2]
+    labels = 'EdgeNetwork', 'Baseline', 'Embed.[14]', 'Ours'
     fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(9, 3))
     ax1.set_title('Recall')
-    ax1.boxplot([rec0, rec2, rec1], showmeans=True, showfliers=False, labels=labels, )
+    bp = ax1.boxplot([rec0, rec2, rec3, rec1], showmeans=True, showfliers=False, labels=labels, whis=[8,92])
+    print(get_box_plot_data(labels, bp))
+    # ax1.set_yscale('log')
+    ax1.set_ylim(0.77, 1.01)
     ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.03))
     ax1.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
+    ax1.set_xlim(0.62, 4.52)
     # show the ytick positions, as a reference
 
     ax2.set_title('Precision')
-    ax2.boxplot([acc0, acc2, acc1], showmeans=True, showfliers=False, labels=labels)
-    ax2.yaxis.set_major_locator(ticker.MultipleLocator(0.02))
+    bp = ax2.boxplot([acc0, acc2, acc3, acc1], showmeans=True, showfliers=False, labels=labels,whis=[8,92])
+    print(get_box_plot_data(labels, bp))
+    # ax2.set_yscale('log')
+    ax2.set_ylim(0.77, 1.01)
+    ax2.set_xlim(0.63, 4.53)
+    ax2.yaxis.set_major_locator(ticker.MultipleLocator(0.03))
     ax2.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
 
-    ax1.text(1.4, 0.87, str(np.around(np.mean(rec0), decimals=3)), color="green", fontsize=10, ha='center')
+    ax1.text(1.5, 0.85, str(np.around(np.mean(rec0), decimals=3)), color="green", fontsize=10, ha='center')
     ax1.text(2.27, 0.893, str(np.around(np.mean(rec2), decimals=3)), color="green", fontsize=10, ha='center')
-    ax1.text(3.27, 0.908, str(np.around(np.mean(rec1), decimals=3)), color="green", fontsize=10, ha='center')
-
-    ax2.text(1.4, 0.923, str(np.around(np.mean(acc0), decimals=3))+'0', color="green", fontsize=10, ha='center')
-    ax2.text(2.27, 0.947, str(np.around(np.mean(acc2), decimals=3)), color="green", fontsize=10, ha='center')
-    ax2.text(3.27, 0.949, str(np.around(np.mean(acc1), decimals=3)), color="green", fontsize=10, ha='center')
+    ax1.text(3.27, 0.9, str(np.around(np.mean(rec3), decimals=3)), color="green", fontsize=10, ha='center')
+    ax1.text(4.27, 0.908, str(np.around(np.mean(rec1), decimals=3)), color="green", fontsize=10, ha='center')
+    ax2.text(1.27, 0.943, str(np.around(np.mean(acc0), decimals=3)), color="green", fontsize=10, ha='center')
+    ax2.text(2.27, 0.943, str(np.around(np.mean(acc2), decimals=3)), color="green", fontsize=10, ha='center')
+    ax2.text(3.27, 0.943, str(np.around(np.mean(acc3), decimals=3)), color="green", fontsize=10, ha='center')
+    ax2.text(4.27, 0.943, str(np.around(np.mean(acc1), decimals=3)), color="green", fontsize=10, ha='center')
 
     plt.savefig('box.pdf')
 
 
 def set_new_threshold():
-    pred_path = '/braindat/lab/liusl/flywire/experiment/test-3k/EdgeNEtwork/predictions'
-    csv_path = '/braindat/lab/liusl/flywire/experiment/test-3k/EdgeNEtwork/block_result_02.csv'
+    # pred_path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/predictions'
+    # csv_path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/thresh.csv'
+    pred_path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/predictions'
+    csv_path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/thresh.csv'
     preds = os.listdir(pred_path)
-    for pred in tqdm(preds):
-        csv_list = pd.read_csv(os.path.join(pred_path, pred), header=None)
-        gt = np.asarray(csv_list[2])
-        prediction = np.asarray(csv_list[4])
-        TP = sum(np.logical_and(prediction > 0.2, gt == 1))
-        FP = sum(np.logical_and(prediction > 0.2, gt == 0))
-        FN = sum(np.logical_and(prediction < 0.2, gt == 1))
-        recall = TP / (TP + FN)
-        accuracy = TP / (TP + FP)
+    threshes = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+    for thresh in threshes:
+        recall_list = []
+        accuracy_list = []
+        for pred in tqdm(preds):
+            csv_list = pd.read_csv(os.path.join(pred_path, pred), header=None)
+            gt = np.asarray(csv_list[2])
+            prediction = np.asarray(csv_list[4])
+            TP = sum(np.logical_and(prediction > thresh, gt == 1))
+            FP = sum(np.logical_and(prediction > thresh, gt == 0))
+            FN = sum(np.logical_and(prediction < thresh, gt == 1))
+            recall = TP / (TP + FN)
+            accuracy = TP / (TP + FP)
+            recall_list.append(recall)
+            accuracy_list.append(accuracy)
         row = pd.DataFrame(
-            [{'block_name': pred, 'recall': recall, 'accuracy': accuracy}])
+            [{'thresh': thresh, 'recall': np.mean(recall_list), 'accuracy': np.mean(accuracy_list)}])
         row.to_csv(csv_path, mode='a', header=False, index=False)
+
+
+def plot_thresh():
+    # path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/thresh.csv'
+    # csv_list = pd.read_csv(path, header=None)
+    # rec1 = csv_list[1]
+    # acc1 = csv_list[2]
+    # path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/thresh.csv'
+    # csv_list = pd.read_csv(path, header=None)
+    # rec2 = csv_list[1]
+    # acc2 = csv_list[2]
+    # path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/thresh.csv'
+    # csv_list = pd.read_csv(path, header=None)
+    # rec0 = csv_list[1]
+    # acc0 = csv_list[2]
+    # path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/thresh.csv'
+    # csv_list = pd.read_csv(path, header=None)
+    # rec3 = csv_list[1]
+    # acc3 = csv_list[2]
+    # fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=2, figsize=(6, 3))
+    # plt.gcf().subplots_adjust(bottom=0.13)
+    # ax1.plot(rec1, acc1, label='ours')
+    # ax1.plot(rec3, acc3, label='Embed.[14]')
+    # ax1.plot(rec2, acc2, label='Baseline')
+    # ax1.plot(rec0, acc0, label='EdgeNetwork')
+    # ax1.plot(rec1[9], acc1[9], 'b^')
+    # ax1.plot(rec3[9], acc3[9], '^', color="orange")
+    # ax1.plot(rec2[9], acc2[9], 'g^')
+    # ax1.plot(rec0[9], acc0[9], 'r^')
+    # ax1.legend()
+    # ax1.set_title('3,000 Test Blocks')
+    # ax1.set_xlabel('recall', labelpad=0.4)
+    # ax1.set_ylabel('precision')
+    # ax1.set_ylim(0.90, 1.01)
+    # ax1.set_xlim(0.80, 1.01)
+    # ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.02))
+    # ax1.yaxis.set_minor_locator(ticker.MultipleLocator(0.005))
+    # ax1.xaxis.set_major_locator(ticker.MultipleLocator(0.05))
+    # ax1.xaxis.set_minor_locator(ticker.MultipleLocator(0.01))
+
+    # fig, [ax1, ax2, ax3, ax4] = plt.subplots(nrows=1, ncols=4, figsize=(14, 3.3))
+    fig, [[ax1, ax2], [ax3, ax4]] = plt.subplots(nrows=2, ncols=2, figsize=(12, 6))
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/0dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec1 = csv_list[1]
+    acc1 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/0dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec2 = csv_list[1]
+    acc2 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/0dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec0 = csv_list[1]
+    acc0 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/0dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec3 = csv_list[1]
+    acc3 = csv_list[2]
+    ax1.set_title('Misalignment', fontsize=14)
+    ax1.plot(rec1, acc1, label='ours')
+    ax1.plot(rec3, acc3, label='Embed.[14]')
+    ax1.plot(rec2, acc2, label='Baseline')
+    ax1.plot(rec0, acc0, label='EdgeNetwork')
+    ax1.plot(rec1[9], acc1[9], 'b^')
+    ax1.plot(rec3[9], acc3[9], '^', color="orange")
+    ax1.plot(rec2[9], acc2[9], 'g^')
+    ax1.plot(rec0[9], acc0[9], 'r^')
+    ax1.legend(fontsize=11)
+    ax1.set_ylim(0.84, 1.0)
+    ax1.set_xlim(0.60, 1.0)
+    # ax1.set_xlabel('recall', labelpad=0.4, fontsize=13)
+    ax1.set_ylabel('precision', fontsize=13)
+    ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.04))
+    ax1.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
+    ax1.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
+    ax1.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
+
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/1dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec1 = csv_list[1]
+    acc1 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/1dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec2 = csv_list[1]
+    acc2 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/1dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec0 = csv_list[1]
+    acc0 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/1dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec3 = csv_list[1]
+    acc3 = csv_list[2]
+    ax2.set_title('Missing-Section', fontsize=14)
+    ax2.plot(rec1, acc1, label='ours')
+    ax2.plot(rec3, acc3, label='Embed.[14]')
+    ax2.plot(rec2, acc2, label='Baseline')
+    ax2.plot(rec0, acc0, label='EdgeNetwork')
+    ax2.plot(rec1[9], acc1[9], 'b^')
+    ax2.plot(rec3[9], acc3[9], '^', color="orange")
+    ax2.plot(rec2[9], acc2[9], 'g^')
+    ax2.plot(rec0[9], acc0[9], 'r^')
+    # ax2.legend()
+    ax2.set_ylim(0.84, 1.0)
+    ax2.set_xlim(0.60, 1.0)
+    # ax2.set_xlabel('recall', labelpad=0.4, fontsize=13)
+    # ax4.set_ylabel('precision', fontsize=12)
+    ax2.yaxis.set_major_locator(ticker.MultipleLocator(0.04))
+    ax2.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
+    ax2.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
+    ax2.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
+
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/0.5dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec1 = csv_list[1]
+    acc1 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/0.5dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec2 = csv_list[1]
+    acc2 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/0.5dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec0 = csv_list[1]
+    acc0 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/0.5dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec3 = csv_list[1]
+    acc3 = csv_list[2]
+    ax3.set_title('Mixed', fontsize=14)
+    ax3.plot(rec1, acc1, label='ours')
+    ax3.plot(rec3, acc3, label='Embed.[14]')
+    ax3.plot(rec2, acc2, label='Baseline')
+    ax3.plot(rec0, acc0, label='EdgeNetwork')
+    ax3.plot(rec1[9], acc1[9], 'b^')
+    ax3.plot(rec3[9], acc3[9], '^', color="orange")
+    ax3.plot(rec2[9], acc2[9], 'g^')
+    ax3.plot(rec0[9], acc0[9], 'r^')
+    # ax2.legend()
+    ax3.set_ylim(0.84, 1.0)
+    ax3.set_xlim(0.60, 1.0)
+    ax3.set_xlabel('recall', labelpad=0.4, fontsize=13)
+    ax3.set_ylabel('precision', fontsize=12)
+    ax3.yaxis.set_major_locator(ticker.MultipleLocator(0.04))
+    ax3.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
+    ax3.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
+    ax3.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
+
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec1 = csv_list[1]
+    acc1 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec2 = csv_list[1]
+    acc2 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec0 = csv_list[1]
+    acc0 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec3 = csv_list[1]
+    acc3 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only/2dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec4 = csv_list[1]
+    acc4 = csv_list[2]
+    ax4.set_title('Average', fontsize=14)
+    ax4.plot(rec1, acc1, label='ours')
+    ax4.plot(rec3, acc3, label='Embed.[14]')
+    ax4.plot(rec2, acc2, label='Baseline')
+    ax4.plot(rec0, acc0, label='EdgeNetwork')
+    ax4.plot(rec4, acc4, label='Image')
+    ax4.plot(rec1[9], acc1[9], 'b^')
+    ax4.plot(rec3[9], acc3[9], '^', color="orange")
+    ax4.plot(rec2[9], acc2[9], 'g^')
+    ax4.plot(rec0[9], acc0[9], 'r^')
+    # ax2.legend()
+    # ax4.legend(fontsize=11)
+    ax4.set_ylim(0.84, 1.0)
+    ax4.set_xlim(0.60, 1.0)
+    ax4.set_xlabel('recall', labelpad=0.4, fontsize=13)
+    # ax4.set_ylabel('precision', fontsize=12)
+    ax4.yaxis.set_major_locator(ticker.MultipleLocator(0.04))
+    ax4.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
+    ax4.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
+    ax4.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
+    plt.tight_layout()
+    # plt.subplots_adjust(wspace=0.18)
+    plt.subplots_adjust(wspace=0.18, hspace=0.3)
+
+    plt.savefig('thresh.pdf')
+
+
+def plot_thresh_distort():
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_distortion.xlsx'
+    # pred_path = ['/braindat/lab/liusl/flywire/experiment/test-3k/finetune1_43k/predictions',
+    #              '/braindat/lab/liusl/flywire/experiment/test-3k/metric/predictions',
+    #              '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/predictions',
+    #              '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/predictions']
+    pred_path = ['/braindat/lab/liusl/flywire/experiment/test-3k/image_only/predictions']
+    list = pd.read_excel(path, header=None)
+    target_type = [2, 0, 0.5, 1]
+    threshes = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+    # threshes = [0.5]
+    for method in pred_path:
+        for thresh in threshes:
+            recall_list = []
+            accuracy_list = []
+            for block, t in zip(list[0], list[1]):
+                if isinstance(block, str):
+                    if t in target_type:
+                        if os.path.exists(os.path.join(method, block)):
+                            csv_list = pd.read_csv(os.path.join(method, block), header=None)
+                            gt = np.asarray(csv_list[2])
+                            prediction = np.asarray(csv_list[4])
+                            TP = sum(np.logical_and(prediction > thresh, gt == 1))
+                            FP = sum(np.logical_and(prediction > thresh, gt == 0))
+                            FN = sum(np.logical_and(prediction < thresh, gt == 1))
+                            recall = TP / (TP + FN)
+                            accuracy = TP / (TP + FP)
+                            recall_list.append(recall)
+                            accuracy_list.append(accuracy)
+            row = pd.DataFrame(
+                [{'thresh': thresh, 'recall': np.mean(recall_list), 'accuracy': np.mean(accuracy_list)}])
+            row.to_csv(method.replace('predictions', str(target_type[0]) + 'dist_thresh.csv'), mode='a', header=False,
+                       index=False)
+
+
+def stat_biological_recall():
+    potential_path = '/braindat/lab/liusl/flywire/block_data/neuroglancer/connector_22_7_97-101.csv'
+    block_paths = ['/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/connector_22_7_97.csv',
+                   '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/connector_22_7_98.csv',
+                   '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/connector_22_7_99.csv',
+                   '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/connector_22_7_100.csv',
+                   '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/connector_22_7_101.csv']
+
+    edges = pd.read_csv(potential_path, header=None)
+    total_positives = 0
+    hit = 0
+    for block_path in block_paths:
+        if os.path.exists(block_path):
+            samples = pd.read_csv(block_path, header=None)
+            positives_indexes = np.where(samples[3] == 1)
+            query = list(samples[0][list(positives_indexes[0])])
+            pos = list(samples[1][list(positives_indexes[0])])
+            for i in range(len(query)):
+                total_positives = total_positives + 1
+                potentials = list(edges[1][np.where(edges[0] == query[i])[0]])
+                if pos[i] in potentials:
+                    hit = hit + 1
+                    continue
+                potentials = list(edges[1][np.where(edges[0] == pos[i])[0]])
+                if query[i] in potentials:
+                    hit = hit + 1
+                    continue
+    print('bilogical edge recall: ', hit / total_positives)
 
 
 def delete_far():

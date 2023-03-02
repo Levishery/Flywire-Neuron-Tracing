@@ -15,7 +15,7 @@ import argparse
 def get_args():
     parser = argparse.ArgumentParser(description="Get GT voxel blocks for one neuron.")
     parser.add_argument('--block_id', type=str, default='None',
-                        help='neuron_id to be download')
+                        help='block_id (connector_x_y_z) to be download')
     args = parser.parse_args()
     return args
 

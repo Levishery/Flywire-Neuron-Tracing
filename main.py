@@ -106,7 +106,12 @@ def main():
 
     # Start training or inference:
     if cfg.DATASET.DO_CHUNK_TITLE == 0 and not cfg.DATASET.DO_MULTI_VOLUME:
-        test_func = trainer.test_one_neuron if cfg.INFERENCE.DO_SINGLY else trainer.test
+        if cfg.INFERENCE.DO_BIOLOGICAL:
+            test_func = trainer.test_biological
+        elif cfg.INFERENCE.DO_SINGLY:
+            test_func = trainer.test_one_neuron
+        else:
+            test_func = trainer.test
         test_func() if args.inference else trainer.train()
     elif cfg.DATASET.DO_MULTI_VOLUME:
         trainer.run_multivolume(mode, rank=args.local_rank)
