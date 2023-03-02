@@ -72,7 +72,7 @@ for q in tqdm(range(0, n)):
     ii = 0
     pos_filepath_output = os.path.join(pos_path_output, str(file_name).split('.')[0])
     neg_filepath_output = os.path.join(neg_path_output, str(file_name).split('.')[0])
-    if not os.path.exists(pos_filepath_output):
+    if not (os.path.exists(pos_filepath_output) and os.path.exists(neg_filepath_output)):
         os.makedirs(neg_filepath_output)
         os.makedirs(pos_filepath_output)
         for ii in range(0, N):
