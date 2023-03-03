@@ -72,7 +72,7 @@ for q in tqdm(range(0, n)):
     ii = 0
     pos_filepath_output = os.path.join(pos_path_output, str(file_name).split('.')[0])
     neg_filepath_output = os.path.join(neg_path_output, str(file_name).split('.')[0])
-    if not (os.path.exists(pos_filepath_output) and os.path.exists(neg_filepath_output)):
+    if not (os.path.exists(pos_filepath_output) or os.path.exists(neg_filepath_output)):
         os.makedirs(neg_filepath_output)
         os.makedirs(pos_filepath_output)
         for ii in range(0, N):
@@ -132,7 +132,7 @@ for q in tqdm(range(0, n)):
                 # print(i)
                 if (len(boundary0.shape) == 1):
                     continue
-                fid1.write(str((boundary0[0, 0] + x - lx) * 16) + "\t" + str((boundary0[0, 1] + y - ly) * 16))
+                fid1.write(str((boundary0[0, 1]*16 + x*4 - lx*16)) + "\t" + str((boundary0[0, 0]*16 + y*4 - ly*16)))
                 fid1.write("\t" + str((i + z - lz) * 40))
                 fid1.write("\t" + str(0))
                 fid1.write("\n")
@@ -151,7 +151,7 @@ for q in tqdm(range(0, n)):
                         k = n
                         # print(d)
                         # fid1.write(str(boundary0[n, 0]) + " " + str(boundary0[n, 1]))
-                        fid1.write(str((boundary0[n, 0] - lx + x) * 16) + "\t" + str((boundary0[n, 1] - ly + y) * 16))
+                        fid1.write(str((boundary0[n, 1]*16 + x*4 - lx*16)) + "\t" + str(boundary0[n, 0]*16 + y*4 - ly*16))
                         # fid.write(str(boundary[n]) + " " + str(boundary[n]))
                         fid1.write("\t" + str((i + z - lz) * 40))
                         fid1.write("\t" + str(0))
@@ -169,7 +169,8 @@ for q in tqdm(range(0, n)):
                 # print(boundary1.shape)
                 if (len(boundary1.shape) == 1):
                     continue
-                fid1.write(str((boundary1[0, 0] - lx + x) * 16) + "\t" + str((boundary1[0, 1] - ly + y) * 16))
+                fid1.write(str((boundary1[0, 1] * 16 + x * 4 - lx * 16)) + "\t" + str(
+                    (boundary1[0, 0] * 16 + y * 4 - ly * 16)))
                 fid1.write("\t" + str((j + z - lz) * 40))
                 fid1.write("\t" + str(1))
                 fid1.write("\n")
@@ -184,7 +185,7 @@ for q in tqdm(range(0, n)):
                         k = n
                         # fid1.write(str(boundary1[n, 0]) + " " + str(boundary1[n, 1]))
                         # print(d)
-                        fid1.write(str((boundary1[n, 0] - lx + x) * 16) + "\t" + str((boundary1[n, 1] - ly + y) * 16))
+                        fid1.write(str((boundary1[n, 1]*16 + x*4 - lx*16)) + "\t" + str(boundary1[n, 0]*16 + y*4 - ly*16))
                         # fid.write(str(boundary[n]) + " " + str(boundary[n]))
                         fid1.write("\t" + str((j + z - lz) * 40))
                         fid1.write("\t" + str(1))

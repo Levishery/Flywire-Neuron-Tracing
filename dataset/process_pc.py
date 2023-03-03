@@ -9,6 +9,7 @@ import os
 from plyfile import PlyData
 import h5py
 import csv
+from tqdm import tqdm
 
 
 def read_ply_points(path):
@@ -183,43 +184,26 @@ if __name__ == '__main__':
     dirs = os.listdir(path)
     N = 1024
     target_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_fps/pos'
-    target_h5_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_fps_h5/pos'
+    # target_h5_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_fps_h5/pos'
     device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-    B = 128
-    for dir in dirs:
+    for dir in tqdm(dirs):
         filepath_input = os.path.join(path, dir)
         t = time.time() - os.path.getmtime(filepath_input)
         if t > 60:
             filepath_output = os.path.join(target_path, dir)
-            filepath_output_h5 = os.path.join(target_h5_path, dir)
+            # filepath_output_h5 = os.path.join(target_h5_path, dir)
             if not os.path.exists(filepath_output):
                 os.makedirs(filepath_output)
-            pcds = os.listdir(filepath_input)
-            pcd_list = []
-            ids_list = []
-            pcd_down_list = []
-            ids_down_list = []
-            for pcd_name in pcds:
-                pcd = read_ply_points(os.path.join(filepath_input, pcd_name))
-                ids = PlyData.read(os.path.join(filepath_input, pcd_name)).elements[0].data['id']
-                if len(np.unique(ids) > 1):
-                    pcd_list.append(np.expand_dims(pcd, axis=0))
-                    ids_list.append(ids)
-            num = len(pcd_list)
-            processed_batch = 0
-            while processed_batch < num:
-                pcd_B = pcd_list[processed_batch:min(processed_batch+B, len(pcd_list)-1)]
-                ids_B = ids_list[processed_batch:min(processed_batch+B, len(pcd_list)-1)]
-                pcd = np.concatenate(pcd_B, dim=0)
-                pcd_tensor = torch.tensor(pcd, dtype=torch.long).unsqueeze(dim=0).to(device)
-                pcd_down_index = farthest_point_sample(pcd_tensor, N)
-                pcd_down = index_points(pcd_tensor, pcd_down_index)
-                for k in range(pcd_down.sahpe[0]):
-                    pcd_out = pcd_down[k, :, :]
-                    ids_down = ids_B[k][pcd_down_index.cpu()][0]
-                    ids_down_list.append(ids_down)
-                processed_batch = processed_batch + B
-            for i in range(len(pcd_down_list)):
-                pcd_out = pcd_down_list[i]
-                ids_down = ids_down_list
-                write_ply(pcd_out, ids_down, os.path.join(filepath_output, pcd_name))
+                pcds = os.listdir(filepath_input)
+                for pcd_name in pcds:
+                    pcd = read_ply_points(os.path.join(filepath_input, pcd_name))
+                    ids = PlyData.read(os.path.join(filepath_input, pcd_name)).elements[0].data['id']
+                    if len(np.unique(ids) > 1):
+                        pcd_tensor = torch.tensor(pcd, dtype=torch.long).unsqueeze(dim=0).to(device)
+                        pcd_down_index = farthest_point_sample(pcd_tensor, N)
+                        pcd_down = index_points(pcd_tensor, pcd_down_index)
+                        pcd_out = pcd_down[0, :, :]
+                        ids_down = ids[pcd_down_index.cpu()][0]
+                        write_ply(pcd_out, ids_down, os.path.join(filepath_output, pcd_name))
+            else:
+                print('%s exists'%filepath_output)
