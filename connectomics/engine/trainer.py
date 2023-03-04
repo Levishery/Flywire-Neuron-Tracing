@@ -26,13 +26,16 @@ from cloudvolume import CloudVolume
 from .solver import *
 from ..model import *
 from ..utils.monitor import build_monitor
+from plyfile import PlyData
 from ..utils.evaluate import visualize
 from torch.cuda.amp import autocast, GradScaler
 from ..data.augmentation import build_train_augmentor, TestAugmentor
 from ..data.dataset import build_dataloader, get_dataset, ConnectorDataset
 from ..data.dataset.build import _get_file_list, _make_path_list
-from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking, pca_emb, readh5
-from ..data.utils import get_padsize, array_unpad, readvol, patch_rand_drop, stat_biological_recall
+from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking, pca_emb, \
+    readh5
+from ..data.utils import get_padsize, array_unpad, readvol, patch_rand_drop, stat_biological_recall, select_points, \
+    get_crop_index
 
 DEBUG = 0
 
@@ -465,8 +468,6 @@ class Trainer(object):
                           'target': int(target[idx] == 1), 'value': pred.detach().cpu()[idx].item()}])
                     row.to_csv(result_csv_path, mode='a', header=False, index=False)
 
-
-
     # -----------------------------------------------------------------------------
     # Misc functions
     # -----------------------------------------------------------------------------
@@ -539,7 +540,7 @@ class Trainer(object):
 
             # 1. filter out unnecessary keys by name
             pretrained_dict = {k: v for k,
-            v in pretrained_dict.items() if k in model_dict}
+                                        v in pretrained_dict.items() if k in model_dict}
             # 2. overwrite entries in the existing state dict (if size match)
             for param_tensor in pretrained_dict:
                 if model_dict[param_tensor].size() == pretrained_dict[param_tensor].size():
@@ -698,8 +699,7 @@ class Trainer(object):
                 block_name = self.dataset.dataset.connector_path.split('/')[-1]
                 csv_path = self.dataset.dataset.connector_path.replace('30_percent_test_3000',
                                                                        '30_percent_test_3000_reformat')
-                csv_path = self.dataset.dataset.connector_path.replace('30_percent_train_1000',
-                                                                       '30_percent_train_1000_reformat')
+                csv_path = csv_path.replace('30_percent_train_1000', '30_percent_train_1000_reformat')
                 if not os.path.exists(csv_path):
                     print('#W Test data do not exist, extracting.')
                     self.dataset.dataset.make_test_data = True
@@ -725,6 +725,79 @@ class Trainer(object):
             row.to_csv(result_path, mode='a', header=False, index=False)
             return
 
+    def get_pc_feature(self, mode: str, rank=None):
+        r"""Run multi volume training for mixed datasets.
+        """
+        self.dataset = get_dataset(self.cfg, self.augmentor, mode, rank=rank)
+        num_chunk = len(self.dataset.volume_path)
+        print("Total number of chunks: ", num_chunk)
+        half_patch_size = np.asarray([3, 3, 1])
+        pc_path_pos = '/braindat/lab/daiyi.zhu/flywire/block_data/v2/point_cloud/train_fps/pos'
+        pc_path_neg = '/braindat/lab/daiyi.zhu/flywire/block_data/v2/point_cloud/train_fps/neg'
+        pc_result_root_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_feature/'
+        out_put_dir = self.cfg.DATASET.OUTPUT_PATH.split('/')[-1]
+        pc_result_root_path = os.path.join(pc_result_root_path, out_put_dir)
+        patch_size = np.asarray(
+            [self.cfg.MODEL.INPUT_SIZE[1], self.cfg.MODEL.INPUT_SIZE[2], self.cfg.MODEL.INPUT_SIZE[0]])
+        block_path = self.dataset.volume_path
+        random.shuffle(block_path)
+        for chunk in range(num_chunk):
+            csv_path = block_path[chunk]
+            block_name = csv_path.split('/')[-1].split('.')[0]
+            pc_ply_path_pos = os.path.join(pc_path_pos, block_name)
+            pc_ply_path_neg = os.path.join(pc_path_neg, block_name)
+            pc_result_path = os.path.join(pc_result_root_path, block_name)
+            if os.path.exists(pc_ply_path_neg) and os.path.exists(pc_ply_path_pos) and not os.path.exists(pc_result_path):
+                os.makedirs(pc_result_path)
+                csv_list = pd.read_csv(csv_path, header=None)
+                self.dataset.updatechunk_given_path(csv_path)
+                self.dataloader = build_dataloader(self.cfg, None, mode, dataset=self.dataset.dataset)
+                self.dataloader = iter(self.dataloader)
+                block_start_cord = self.dataset.start_cord
+                start = time.perf_counter()
+                with torch.no_grad():
+                    for i, sample in enumerate(self.dataloader):
+                        print('progress: %d/%d batches, total time %.2fs' %
+                              (i + 1, len(self.dataloader), time.perf_counter() - start))
+                        volume = sample.out_input
+                        seg_ids = sample.candidates
+                        volume, _ = self.get_morph_input(volume, sample.pos)
+                        label = sample.seg_start
+                        for idx in range(len(seg_ids)):
+                            name = str(seg_ids[idx][0]) + '_' + str(seg_ids[idx][1]) + '.ply'
+                            if label[idx] == 0:
+                                pc_ply_path = pc_ply_path_neg
+                            else:
+                                pc_ply_path = pc_ply_path_pos
+                            if os.path.exists(os.path.join(pc_ply_path, name)):
+                                pc = PlyData.read(os.path.join(pc_ply_path, name))
+                                patch_cord = np.asarray(block_start_cord) + np.asarray(
+                                    [sample.pos[idx][2] * 4, sample.pos[idx][3] * 4, sample.pos[idx][1]])
+                                bbox = [list(patch_cord), list(patch_cord + patch_size * [4, 4, 1])]
+                                x = pc.elements[0].data['x']
+                                y = pc.elements[0].data['y']
+                                z = pc.elements[0].data['z']
+                                ids = pc.elements[0].data['id']
+                                cords = np.transpose(np.asarray([x, y, z]) / np.expand_dims(np.asarray([4, 4, 40]), axis=1),
+                                                     [1, 0])
+                                embeddings = np.zeros([len(x), 16])
+                                in_box_indexes = np.where(select_points(bbox, cords))[0]
+                                for in_box_index in in_box_indexes:
+                                    cord_in_patch = np.round((cords[in_box_index] - patch_cord) / [4, 4, 1]).astype(
+                                        np.int32)
+                                    [x_bound, y_bound, z_bound] = get_crop_index(cord_in_patch, half_patch_size, patch_size)
+                                    local_embed = volume[idx, 3:, z_bound[0]:z_bound[1], x_bound[0]:x_bound[1],
+                                                  y_bound[0]:y_bound[1]]
+                                    local_mask = volume[idx, ids[in_box_index], z_bound[0]:z_bound[1],
+                                                 x_bound[0]:x_bound[1], y_bound[0]:y_bound[1]] == 1
+                                    if not local_mask.any():
+                                        continue
+                                    mean_embed = torch.mean(local_embed[:, local_mask], dim=1)
+                                    embeddings[in_box_index, :] = mean_embed.detach().cpu().numpy()
+                                writeh5(os.path.join(pc_result_path, name.replace('.ply', '.h5')), embeddings)
+
+        return
+
     def xpblock_to_fafb(self, z_block, y_block, x_block, z_coo=0, y_coo=0, x_coo=0):
         '''
         函数功能:xp集群上的点到fafb原始坐标的转换
@@ -748,10 +821,10 @@ class Trainer(object):
         # z_fafb = 26 * z_block + 30 + z_coo
         return (x_fafb, y_fafb, z_fafb)
 
-
-    def get_morph_input(self, volume):
+    def get_morph_input(self, volume, pos=None):
         volume_image = volume[:, 0, :, :, :]
         volume_morph = volume[:, 1:, :, :, :]
+        pos_record = pos[0]
         if self.cfg.MODEL.IN_PLANES > 4:
             if self.cfg.MODEL.MASK_EMBED:
                 morph_dim = 2
@@ -763,39 +836,27 @@ class Trainer(object):
                 image_batch_size = 1
                 num_batch = int(np.ceil(volume_image.shape[0] / image_batch_size))
                 volume_embedding_list = []
+
                 for i in range(num_batch):
+                    if np.all(pos[i] == pos_record) and i > 0:
+                        volume_embedding_list.append(volume_embedding)
+                        continue
+                    pos_record = pos[i]
                     input_image = volume_image[i * image_batch_size:(i + 1) * image_batch_size].to(self.device,
                                                                                                    non_blocking=True)
                     input_image = input_image.unsqueeze(dim=1)
                     volume_embedding = self.image_model(input_image)
+
                     if self.cfg.MODEL.DROP_MOD:
                         if random.random() < 0.1:
                             volume_embedding[:] = torch.mean(volume_embedding)
-
-                        # fig = plt.figure()
-                        # ax = fig.gca(projection='3d')
-                        # voxels = volume_morph[i, 2, :, :, :] != 0
-                        # colors = np.empty(voxels.shape, dtype=object)
-                        # colors[volume_morph[i, 0, :, :, :] > 0] = 'red'
-                        # colors[volume_morph[i, 1, :, :, :] > 0] = 'blue'
-                        # ax.voxels(voxels, facecolors=colors)
-                        # plt.show()
-
                         volume_morph[i, 0, :, :, :] = patch_rand_drop(volume_morph[i, 0, :, :, :].unsqueeze(dim=0))
                         volume_morph[i, 1, :, :, :] = patch_rand_drop(volume_morph[i, 1, :, :, :].unsqueeze(dim=0))
                         volume_morph[i, 2, :, :, :] = volume_morph[i, 0, :, :, :] + volume_morph[i, 1, :, :, :]
-
-                        # fig = plt.figure()
-                        # ax = fig.gca(projection='3d')
-                        # voxels = volume_morph[i, 2, :, :, :] != 0
-                        # colors = np.empty(voxels.shape, dtype=object)
-                        # colors[volume_morph[i, 0, :, :, :] > 0] = 'red'
-                        # colors[volume_morph[i, 1, :, :, :] > 0] = 'blue'
-                        # ax.voxels(voxels, facecolors=colors)
-                        # plt.show()
-
                     volume_embedding_list.append(volume_embedding)
+
                 volume_embedding = torch.cat(volume_embedding_list, dim=0)
+
                 if self.cfg.MODEL.EMBED_REDUCTION is not None:
                     return volume_morph.contiguous().to(self.device, non_blocking=True), volume_embedding
                 if embed_dim < volume_embedding.shape[1]:

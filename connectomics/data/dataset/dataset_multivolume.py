@@ -47,6 +47,7 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
                  connector_dataset=False,
                  **kwargs):
 
+        self.start_cord = []
         self.kwargs = kwargs
         self.mode = mode
         self.volume_path = volume_path
@@ -94,6 +95,13 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
         if do_load:
             self.loadchunk()
 
+    def updatechunk_given_path(self, path, do_load=True):
+        r"""Update the Dataset to a new chunk in the large volume.
+        """
+        self.volume_sample = path
+        if do_load:
+            self.loadchunk()
+
     def loadchunk(self):
         r"""Load the chunk and construct a VolumeDataset for processing.
         """
@@ -118,6 +126,7 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
             # volume_ffn1 = self.vol_ffn1[cord_start[0] / 4:cord_end[0] / 4 + 1,
             #               cord_start[1] / 4:cord_end[1] / 4 + 1, cord_start[2]:cord_end[2] + 1]
             volume_ffn1 = np.transpose(volume_ffn1.squeeze(), (2, 0, 1))
+            self.start_cord = [(cord_start[0] / 4 - 156)*4, (cord_start[1] / 4 - 156)*4, cord_start[2] - 16]
             self.dataset = ConnectorDataset(connector_path=self.volume_sample, volume=volume,
                                             vol_ffn1=volume_ffn1, mode=self.mode,
                                             iter_num=self.chunk_iter if self.mode =='train' else -1, **self.kwargs)

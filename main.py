@@ -114,7 +114,10 @@ def main():
             test_func = trainer.test
         test_func() if args.inference else trainer.train()
     elif cfg.DATASET.DO_MULTI_VOLUME:
-        trainer.run_multivolume(mode, rank=args.local_rank)
+        if cfg.INFERENCE.GET_PC_FEATURE:
+            trainer.get_pc_feature(mode, rank=args.local_rank)
+        else:
+            trainer.run_multivolume(mode, rank=args.local_rank)
     else:
         trainer.run_chunk(mode)
 

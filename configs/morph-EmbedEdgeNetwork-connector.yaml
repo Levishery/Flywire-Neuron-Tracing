@@ -17,7 +17,7 @@ MODEL:
   MIXED_PRECESION: True
   MASK_EMBED: False
   IMAGE_MODEL_CFG: configs/test-neuron-swin-connector.yaml
-  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/image-swin-finetune-hard/checkpoint_504000.pth
+  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/fintune-final-ckpt/checkpoint_best.pth
   DROP_MOD: False
 MONITOR:
   ITERATION_NUM: [20, 200]

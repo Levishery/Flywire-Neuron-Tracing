@@ -17,7 +17,7 @@ MODEL:
   MIXED_PRECESION: True
   MASK_EMBED: False
   IMAGE_MODEL_CFG: configs/test-Image-Unet-connector.yaml
-  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/fintune-final-ckpt-Unet/checkpoint_best.pth
+  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/ckpts/embeddings/checkpoint_best_Unet.pth
   DROP_MOD: False
 MONITOR:
   ITERATION_NUM: [20, 200]
@@ -30,7 +30,7 @@ SOLVER:
   ITERATION_SAVE: 200
   ITERATION_TOTAL: 55000
   ITERATION_VAL: 200
-  SAMPLES_PER_BATCH: 64 # PER GPU
+  SAMPLES_PER_BATCH: 60 # PER GPU
 DATASET:
   RELABEL: False
   DATA_CHUNK_ITER: 40

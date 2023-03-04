@@ -48,7 +48,8 @@ def findid3(df, index, offset):
 
 # filepath_data = r"E:\Desktop\aw"
 # '/braindat/lab/liusl/flywire/block_data/train_30'
-filepath_data = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000_reformat'
+# filepath_data = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000_reformat'
+filepath_data = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat'
 filenames = os.listdir(filepath_data)
 q = 0
 n = len(filenames)
@@ -57,8 +58,8 @@ lx = 80
 ly = 80
 lz = 32
 vol = CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0', cache=True, parallel=True)
-pos_path_output = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train/pos'
-neg_path_output = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train/neg'
+pos_path_output = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test/pos'
+neg_path_output = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test/neg'
 step = 1
 
 for q in tqdm(range(0, n)):
@@ -85,7 +86,17 @@ for q in tqdm(range(0, n)):
             segid2 = df.iloc[ii, 1]
             # if segid1 == 6978865582:
             #     print('@')
-            cord = df.iloc[ii, 5][1:-1].split(',')
+            if filepath_data == '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000_reformat':
+                cord = df.iloc[ii, 5][1:-1].split(',')
+            else:
+                cord = df.iloc[ii, 2][1:-1].split()
+                cord = [int(cord[0]), int(cord[1]), int(cord[2]), int(cord[3])]
+                block_xyz = file_name.split('.')[0].split('_')[1:]
+                cord_start = xpblock_to_fafb(int(block_xyz[2]), int(block_xyz[1]), int(block_xyz[0]), 28, 0, 0)
+                start_cord = [(cord_start[0] / 4 - 156) * 4, (cord_start[1] / 4 - 156) * 4, cord_start[2] - 16]
+                cord = np.asarray(start_cord) + np.asarray(
+                    [cord[2] * 4, cord[3] * 4, cord[1]]) + np.asarray(
+                    [64 * 4, 64 * 4, 8])
             # cord = df.iloc[ii, 2][1:-1].split()
             # cord = [int(cord[0]), int(cord[1]), int(cord[2]), int(cord[3])]
             # cord = np.asarray(cord) + np.asarray([0, 8, 64, 64]) + np.asarray([0, 16+28, 156, 156])

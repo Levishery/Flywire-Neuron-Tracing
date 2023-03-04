@@ -3,6 +3,7 @@ cp .sh/sharded.py /usr/local/lib/python3.8/dist-packages/cloudvolume/datasource/
 pip install -U pip
 apt-get install tmux
 pip install connected-components-3d
+pip install plyfile
 
 #export PATH=/usr/local/cuda-11.3/bin:$PATH
 #export LD_LIBRARY_PATH=/usr/local/cuda-11.3/lib64:$LD_LIBRARY_PATH
