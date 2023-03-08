@@ -38,10 +38,11 @@ DATASET:
   INPUT_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000_reformat
   IMAGE_NAME:
   LABEL_NAME:
-  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/extract_pc_Unet
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True
 INFERENCE:
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
   GET_PC_FEATURE: True
   OUTPUT_ACT: ["none"]
   SAMPLES_PER_BATCH: 64 # per gpu

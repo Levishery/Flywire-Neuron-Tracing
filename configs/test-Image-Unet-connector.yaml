@@ -1,4 +1,7 @@
 # learn dense 3d image embedding with V-net
+SYSTEM:
+  NUM_GPUS: 1
+  NUM_CPUS: 2
 MODEL:
   INPUT_SIZE: [ 17, 129, 129 ]
   OUTPUT_SIZE: [ 17, 129, 129 ]

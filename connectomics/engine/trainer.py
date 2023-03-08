@@ -694,9 +694,18 @@ class Trainer(object):
             result_path = os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'block_result.csv')
             if not os.path.exists(os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'predictions')):
                 os.makedirs(os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'predictions'))
+            block_path = self.dataset.volume_path.copy()
+            random.seed(time.time())
+            random.shuffle(block_path)
             for chunk in range(num_chunk):
-                self.dataset.updatechunk()
-                block_name = self.dataset.dataset.connector_path.split('/')[-1]
+                csv_path = block_path[chunk]
+                block_name = csv_path.split('/')[-1]
+                visualize_csv_path = os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'predictions', block_name)
+                if os.path.exists(visualize_csv_path):
+                    print('block %s is already tested.' % block_name)
+                    continue
+                self.dataset.updatechunk_given_path(csv_path)
+                # self.dataset.updatechunk()
                 csv_path = self.dataset.dataset.connector_path.replace('30_percent_test_3000',
                                                                        '30_percent_test_3000_reformat')
                 csv_path = csv_path.replace('30_percent_train_1000', '30_percent_train_1000_reformat')
@@ -707,10 +716,6 @@ class Trainer(object):
                     self.dataloader = iter(self.dataloader)
                     self.get_test_dataset()
                 else:
-                    visualize_csv_path = os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'predictions', block_name)
-                    if os.path.exists(visualize_csv_path):
-                        print('block %s is already tested.' % block_name)
-                        continue
                     self.dataloader = build_dataloader(self.cfg, None, mode, dataset=self.dataset.dataset)
                     self.dataloader = iter(self.dataloader)
                     rec, acc = self.test_embededge(visualize_csv_path)
@@ -732,18 +737,23 @@ class Trainer(object):
         num_chunk = len(self.dataset.volume_path)
         print("Total number of chunks: ", num_chunk)
         half_patch_size = np.asarray([3, 3, 1])
-        pc_path_pos = '/braindat/lab/daiyi.zhu/flywire/block_data/v2/point_cloud/train_fps/pos'
-        pc_path_neg = '/braindat/lab/daiyi.zhu/flywire/block_data/v2/point_cloud/train_fps/neg'
-        pc_result_root_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_feature/'
+        # pc_path_pos = '/braindat/lab/daiyi.zhu/flywire/block_data/v2/point_cloud/train_fps/pos'
+        # pc_path_neg = '/braindat/lab/daiyi.zhu/flywire/block_data/v2/point_cloud/train_fps/neg'
+        # pc_result_root_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_feature/'
+        pc_path_pos = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps/pos'
+        pc_path_neg = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps/neg'
+        pc_result_root_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_feature/'
         out_put_dir = self.cfg.DATASET.OUTPUT_PATH.split('/')[-1]
         pc_result_root_path = os.path.join(pc_result_root_path, out_put_dir)
         patch_size = np.asarray(
             [self.cfg.MODEL.INPUT_SIZE[1], self.cfg.MODEL.INPUT_SIZE[2], self.cfg.MODEL.INPUT_SIZE[0]])
-        block_path = self.dataset.volume_path
+        block_path = self.dataset.volume_path.copy()
+        random.seed(time.time())
         random.shuffle(block_path)
         for chunk in range(num_chunk):
             csv_path = block_path[chunk]
             block_name = csv_path.split('/')[-1].split('.')[0]
+            # block_name = 'connector_18_10_121'
             pc_ply_path_pos = os.path.join(pc_path_pos, block_name)
             pc_ply_path_neg = os.path.join(pc_path_neg, block_name)
             pc_result_path = os.path.join(pc_result_root_path, block_name)
@@ -824,7 +834,8 @@ class Trainer(object):
     def get_morph_input(self, volume, pos=None):
         volume_image = volume[:, 0, :, :, :]
         volume_morph = volume[:, 1:, :, :, :]
-        pos_record = pos[0]
+        if pos is not None:
+            pos_record = pos[0]
         if self.cfg.MODEL.IN_PLANES > 4:
             if self.cfg.MODEL.MASK_EMBED:
                 morph_dim = 2
@@ -838,10 +849,11 @@ class Trainer(object):
                 volume_embedding_list = []
 
                 for i in range(num_batch):
-                    if np.all(pos[i] == pos_record) and i > 0:
-                        volume_embedding_list.append(volume_embedding)
-                        continue
-                    pos_record = pos[i]
+                    if pos is not None:
+                        if np.all(pos[i] == pos_record) and i > 0:
+                            volume_embedding_list.append(volume_embedding)
+                            continue
+                        pos_record = pos[i]
                     input_image = volume_image[i * image_batch_size:(i + 1) * image_batch_size].to(self.device,
                                                                                                    non_blocking=True)
                     input_image = input_image.unsqueeze(dim=1)

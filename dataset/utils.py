@@ -326,7 +326,7 @@ def get_box_plot_data(labels, bp):
 
 
 def plot():
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune1_43k/block_result.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/block_result.csv'
     csv_list = pd.read_csv(path, header=None)
     rec1 = csv_list[1]
     acc1 = csv_list[2]
@@ -342,35 +342,39 @@ def plot():
     csv_list = pd.read_csv(path, header=None)
     rec3 = csv_list[1]
     acc3 = csv_list[2]
-    labels = 'EdgeNetwork', 'Baseline', 'Embed.[14]', 'Ours'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only_43k/block_result.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec4 = csv_list[1]
+    acc4 = csv_list[2]
+    labels = 'EdgeNetwork', 'Baseline', 'Ours-Embed.[14]', 'Ours-Image', 'Ours-Pairwise-Embed.'
     fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(9, 3))
     ax1.set_title('Recall')
-    bp = ax1.boxplot([rec0, rec2, rec3, rec1], showmeans=True, showfliers=False, labels=labels, whis=[8,92])
+    bp = ax1.boxplot([rec0, rec2, rec3, rec4, rec1], showmeans=True, showfliers=False, labels=labels)
     print(get_box_plot_data(labels, bp))
     # ax1.set_yscale('log')
     ax1.set_ylim(0.77, 1.01)
     ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.03))
     ax1.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
-    ax1.set_xlim(0.62, 4.52)
+    # ax1.set_xlim(0.62, 4.52)
     # show the ytick positions, as a reference
 
     ax2.set_title('Precision')
-    bp = ax2.boxplot([acc0, acc2, acc3, acc1], showmeans=True, showfliers=False, labels=labels,whis=[8,92])
+    bp = ax2.boxplot([acc0, acc2, acc3, acc4, acc1], showmeans=True, showfliers=False, labels=labels)
     print(get_box_plot_data(labels, bp))
     # ax2.set_yscale('log')
     ax2.set_ylim(0.77, 1.01)
-    ax2.set_xlim(0.63, 4.53)
+    # ax2.set_xlim(0.63, 4.53)
     ax2.yaxis.set_major_locator(ticker.MultipleLocator(0.03))
     ax2.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
 
-    ax1.text(1.5, 0.85, str(np.around(np.mean(rec0), decimals=3)), color="green", fontsize=10, ha='center')
-    ax1.text(2.27, 0.893, str(np.around(np.mean(rec2), decimals=3)), color="green", fontsize=10, ha='center')
-    ax1.text(3.27, 0.9, str(np.around(np.mean(rec3), decimals=3)), color="green", fontsize=10, ha='center')
-    ax1.text(4.27, 0.908, str(np.around(np.mean(rec1), decimals=3)), color="green", fontsize=10, ha='center')
-    ax2.text(1.27, 0.943, str(np.around(np.mean(acc0), decimals=3)), color="green", fontsize=10, ha='center')
-    ax2.text(2.27, 0.943, str(np.around(np.mean(acc2), decimals=3)), color="green", fontsize=10, ha='center')
-    ax2.text(3.27, 0.943, str(np.around(np.mean(acc3), decimals=3)), color="green", fontsize=10, ha='center')
-    ax2.text(4.27, 0.943, str(np.around(np.mean(acc1), decimals=3)), color="green", fontsize=10, ha='center')
+    # ax1.text(1.5, 0.85, str(np.around(np.mean(rec0), decimals=3)), color="green", fontsize=10, ha='center')
+    # ax1.text(2.27, 0.893, str(np.around(np.mean(rec2), decimals=3)), color="green", fontsize=10, ha='center')
+    # ax1.text(3.27, 0.9, str(np.around(np.mean(rec3), decimals=3)), color="green", fontsize=10, ha='center')
+    # ax1.text(4.27, 0.908, str(np.around(np.mean(rec1), decimals=3)), color="green", fontsize=10, ha='center')
+    # ax2.text(1.27, 0.943, str(np.around(np.mean(acc0), decimals=3)), color="green", fontsize=10, ha='center')
+    # ax2.text(2.27, 0.943, str(np.around(np.mean(acc2), decimals=3)), color="green", fontsize=10, ha='center')
+    # ax2.text(3.27, 0.943, str(np.around(np.mean(acc3), decimals=3)), color="green", fontsize=10, ha='center')
+    # ax2.text(4.27, 0.943, str(np.around(np.mean(acc1), decimals=3)), color="green", fontsize=10, ha='center')
 
     plt.savefig('box.pdf')
 
@@ -546,7 +550,7 @@ def plot_thresh():
     ax3.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
     ax3.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
 
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/2dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec1 = csv_list[1]
     acc1 = csv_list[2]
@@ -562,7 +566,7 @@ def plot_thresh():
     csv_list = pd.read_csv(path, header=None)
     rec3 = csv_list[1]
     acc3 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only/2dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only_43k/2dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec4 = csv_list[1]
     acc4 = csv_list[2]
@@ -576,6 +580,7 @@ def plot_thresh():
     ax4.plot(rec3[9], acc3[9], '^', color="orange")
     ax4.plot(rec2[9], acc2[9], 'g^')
     ax4.plot(rec0[9], acc0[9], 'r^')
+    ax4.plot(rec0[9], acc0[9], '^', color="purple")
     # ax2.legend()
     # ax4.legend(fontsize=11)
     ax4.set_ylim(0.84, 1.0)
@@ -599,7 +604,7 @@ def plot_thresh_distort():
     #              '/braindat/lab/liusl/flywire/experiment/test-3k/metric/predictions',
     #              '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/predictions',
     #              '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/predictions']
-    pred_path = ['/braindat/lab/liusl/flywire/experiment/test-3k/image_only/predictions']
+    pred_path = ['/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/predictions']
     list = pd.read_excel(path, header=None)
     target_type = [2, 0, 0.5, 1]
     threshes = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]

@@ -41,6 +41,15 @@ def index_points(points, idx):
     return new_points
 
 
+def select_points(bbox, points):
+    [[bx1, by1, bz1], [bx2, by2, bz2]] = bbox
+    ll = np.array([bx1, by1, bz1])  # lower-left
+    ur = np.array([bx2, by2, bz2])  # upper-right
+
+    inidx = np.all(np.logical_and(ll <= points, points <= ur), axis=1)
+    return inidx
+
+
 def farthest_point_sample(xyz, npoint):
     """
     Input:
@@ -118,8 +127,13 @@ def h5(filepath_output, outpath):
 
 def work(dir):
     N = 1024
-    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train/pos'
-    target_path = '/braindat/lab/daiyi.zhu/flywire/block_data/v2/point_cloud/train_fps/pos'
+    lx = 60
+    ly = 60
+    lz = 24
+    crop_center = False
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test/pos'
+    target_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps/pos'
+    filepath_data = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000_reformat'
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     filepath_input = os.path.join(path, dir)
     t = time.time() - os.path.getmtime(filepath_input)
@@ -128,29 +142,46 @@ def work(dir):
         # filepath_output_h5 = os.path.join(target_h5_path, dir)
         if not os.path.exists(filepath_output):
             os.makedirs(filepath_output)
+            csv_path = os.path.join(filepath_data, str(dir)+'.csv')
+            # if os.path.exists(csv_path):
             pcds = os.listdir(filepath_input)
             for pcd_name in tqdm(pcds):
                 pcd = read_ply_points(os.path.join(filepath_input, pcd_name))
+                seg_ids = pcd_name.split('.')[0].split('_')
+                seg_ids = [int(seg_ids[0]), int(seg_ids[1])]
                 ids = PlyData.read(os.path.join(filepath_input, pcd_name)).elements[0].data['id']
-                if len(np.unique(ids) > 1):
-                    pcd_tensor = torch.tensor(pcd, dtype=torch.long).unsqueeze(dim=0).to(device)
-                    pcd_down_index = farthest_point_sample(pcd_tensor, N)
-                    pcd_down = index_points(pcd_tensor, pcd_down_index)
-                    pcd_out = pcd_down[0, :, :]
-                    ids_down = ids[pcd_down_index.cpu()][0]
-                    write_ply(pcd_out, ids_down, os.path.join(filepath_output, pcd_name))
+                if len(np.unique(ids)) > 1:
+                    if crop_center:
+                        df = pd.read_csv(csv_path, header=None)
+                        center_cord = df.loc[(df[0] == seg_ids[0]) & (df[1] == seg_ids[1]), 5].values[0][1:-1].split(',')
+                        center_cord = [float(center_cord[0]), float(center_cord[1]), float(center_cord[2])]
+                        cords = pcd / np.asarray([4, 4, 40])
+                        bbox = [list(center_cord-np.asarray([lx,ly,lz])* [4, 4, 1]), list(center_cord+np.asarray([lx,ly,lz])* [4, 4, 1])]
+                        in_box_indexes = np.where(select_points(bbox, cords))[0]
+                        if len(in_box_indexes) > len(ids)*0.4:
+                            pcd = pcd[in_box_indexes]
+                            ids = ids[in_box_indexes]
+                            pcd_tensor = torch.tensor(pcd, dtype=torch.long).unsqueeze(dim=0).to(device)
+                            pcd_down_index = farthest_point_sample(pcd_tensor, N)
+                            pcd_down = index_points(pcd_tensor, pcd_down_index)
+                            pcd_out = pcd_down[0, :, :]
+                            ids_down = ids[pcd_down_index.cpu()][0]
+                            write_ply(pcd_out, ids_down, os.path.join(filepath_output, pcd_name))
+                    else:
+                        pcd_tensor = torch.tensor(pcd, dtype=torch.long).unsqueeze(dim=0).to(device)
+                        pcd_down_index = farthest_point_sample(pcd_tensor, N)
+                        pcd_down = index_points(pcd_tensor, pcd_down_index)
+                        pcd_out = pcd_down[0, :, :]
+                        ids_down = ids[pcd_down_index.cpu()][0]
+                        write_ply(pcd_out, ids_down, os.path.join(filepath_output, pcd_name))
         else:
             print('%s exists' % filepath_output)
 
 
 if __name__ == '__main__':
-    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train/neg'
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test/pos'
     dirs = os.listdir(path)
-    N = 1024
-    target_path = '/braindat/lab/daiyi.zhu/flywire/block_data/v2/point_cloud/train_fps/neg'
-    # os.makedirs(target_path, exist_ok=True)
     torch.multiprocessing.set_start_method('spawn')
-    # target_h5_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_fps_h5/pos'
 
     num_worker = 4
     num_worker_real = min(num_worker, os.cpu_count())
