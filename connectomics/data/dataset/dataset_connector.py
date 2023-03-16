@@ -112,8 +112,11 @@ class ConnectorDataset(torch.utils.data.Dataset):
         # For relatively small volumes, the total number of samples can be generated is smaller
         # than the number of samples required for training (i.e., iteration * batch size). Thus
         # we let the __len__() of the dataset return the larger value among the two during training.
-        self.iter_num = max(
-            iter_num, self.sample_num_a) if self.mode == 'train' else self.sample_num_a
+        if self.morphology_dataset and self.mode == 'test':
+            self.iter_num = len(self.test_sample_list)
+        else:
+            self.iter_num = max(
+                iter_num, self.sample_num_a) if self.mode == 'train' else self.sample_num_a
         print('Total number of samples to be generated: ', self.iter_num)
 
     def __len__(self):

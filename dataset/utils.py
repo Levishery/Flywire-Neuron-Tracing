@@ -444,8 +444,8 @@ def plot_thresh():
     # ax1.xaxis.set_minor_locator(ticker.MultipleLocator(0.01))
 
     # fig, [ax1, ax2, ax3, ax4] = plt.subplots(nrows=1, ncols=4, figsize=(14, 3.3))
-    fig, [[ax1, ax2], [ax3, ax4]] = plt.subplots(nrows=2, ncols=2, figsize=(12, 6))
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/0dist_thresh.csv'
+    fig, [[ax1, ax2], [ax3, ax4]] = plt.subplots(nrows=2, ncols=2, figsize=(12, 5.2))
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/0dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec1 = csv_list[1]
     acc1 = csv_list[2]
@@ -461,16 +461,22 @@ def plot_thresh():
     csv_list = pd.read_csv(path, header=None)
     rec3 = csv_list[1]
     acc3 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only_43k/0dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec4 = csv_list[1]
+    acc4 = csv_list[2]
     ax1.set_title('Misalignment', fontsize=14)
-    ax1.plot(rec1, acc1, label='ours')
-    ax1.plot(rec3, acc3, label='Embed.[14]')
-    ax1.plot(rec2, acc2, label='Baseline')
-    ax1.plot(rec0, acc0, label='EdgeNetwork')
+    ax1.plot(rec0, acc0, 'r-', label='EdgeNetwork[15]')
+    ax1.plot(rec2, acc2, 'g-', label='Baseline')
+    ax1.plot(rec3, acc3, label='BS+Seg-Embed[11]', color='orange')
+    ax1.plot(rec4, acc4, label='BS+Intensity', color='purple')
+    ax1.plot(rec1, acc1, 'b-', label='BS+Connect-Embed')
     ax1.plot(rec1[9], acc1[9], 'b^')
     ax1.plot(rec3[9], acc3[9], '^', color="orange")
     ax1.plot(rec2[9], acc2[9], 'g^')
     ax1.plot(rec0[9], acc0[9], 'r^')
-    ax1.legend(fontsize=11)
+    ax1.plot(rec4[9], acc4[9], '^', color="purple")
+    # ax1.legend(fontsize=11)
     ax1.set_ylim(0.84, 1.0)
     ax1.set_xlim(0.60, 1.0)
     # ax1.set_xlabel('recall', labelpad=0.4, fontsize=13)
@@ -480,7 +486,7 @@ def plot_thresh():
     ax1.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
     ax1.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
 
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/1dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/1dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec1 = csv_list[1]
     acc1 = csv_list[2]
@@ -496,15 +502,21 @@ def plot_thresh():
     csv_list = pd.read_csv(path, header=None)
     rec3 = csv_list[1]
     acc3 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only_43k/1dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec4 = csv_list[1]
+    acc4 = csv_list[2]
     ax2.set_title('Missing-Section', fontsize=14)
-    ax2.plot(rec1, acc1, label='ours')
-    ax2.plot(rec3, acc3, label='Embed.[14]')
-    ax2.plot(rec2, acc2, label='Baseline')
-    ax2.plot(rec0, acc0, label='EdgeNetwork')
+    ax2.plot(rec0, acc0, 'r-', label='EdgeNetwork[16]')
+    ax2.plot(rec2, acc2, 'g-', label='Baseline')
+    ax2.plot(rec4, acc4, label='Image', color='purple')
+    ax2.plot(rec3, acc3, label='Embed.[11]', color='orange')
+    ax2.plot(rec1, acc1, 'b-', label='Proposed')
     ax2.plot(rec1[9], acc1[9], 'b^')
     ax2.plot(rec3[9], acc3[9], '^', color="orange")
     ax2.plot(rec2[9], acc2[9], 'g^')
     ax2.plot(rec0[9], acc0[9], 'r^')
+    ax2.plot(rec4[9], acc4[9], '^', color="purple")
     # ax2.legend()
     ax2.set_ylim(0.84, 1.0)
     ax2.set_xlim(0.60, 1.0)
@@ -515,7 +527,7 @@ def plot_thresh():
     ax2.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
     ax2.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
 
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/0.5dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/0.5dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec1 = csv_list[1]
     acc1 = csv_list[2]
@@ -531,15 +543,21 @@ def plot_thresh():
     csv_list = pd.read_csv(path, header=None)
     rec3 = csv_list[1]
     acc3 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only_43k/0.5dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec4 = csv_list[1]
+    acc4 = csv_list[2]
     ax3.set_title('Mixed', fontsize=14)
-    ax3.plot(rec1, acc1, label='ours')
-    ax3.plot(rec3, acc3, label='Embed.[14]')
-    ax3.plot(rec2, acc2, label='Baseline')
-    ax3.plot(rec0, acc0, label='EdgeNetwork')
+    ax3.plot(rec0, acc0, 'r-', label='EdgeNetwork[16]')
+    ax3.plot(rec2, acc2, 'g-', label='Baseline')
+    ax3.plot(rec4, acc4, label='Image', color='purple')
+    ax3.plot(rec3, acc3, label='Embed.[11]', color='orange')
+    ax3.plot(rec1, acc1, 'b-', label='Proposed')
     ax3.plot(rec1[9], acc1[9], 'b^')
     ax3.plot(rec3[9], acc3[9], '^', color="orange")
     ax3.plot(rec2[9], acc2[9], 'g^')
     ax3.plot(rec0[9], acc0[9], 'r^')
+    ax3.plot(rec4[9], acc4[9], '^', color="purple")
     # ax2.legend()
     ax3.set_ylim(0.84, 1.0)
     ax3.set_xlim(0.60, 1.0)
@@ -571,18 +589,18 @@ def plot_thresh():
     rec4 = csv_list[1]
     acc4 = csv_list[2]
     ax4.set_title('Average', fontsize=14)
-    ax4.plot(rec1, acc1, label='ours')
-    ax4.plot(rec3, acc3, label='Embed.[14]')
-    ax4.plot(rec2, acc2, label='Baseline')
-    ax4.plot(rec0, acc0, label='EdgeNetwork')
-    ax4.plot(rec4, acc4, label='Image')
+    ax4.plot(rec0, acc0, 'r-', label='EdgeNetwork[15]')
+    ax4.plot(rec2, acc2, 'g-', label='Baseline')
+    ax4.plot(rec3, acc3, label='BS+Seg-Embed[11]', color='orange')
+    ax4.plot(rec4, acc4, label='BS+Intensity', color='purple')
+    ax4.plot(rec1, acc1, 'b-', label='BS+Connect-Embed')
     ax4.plot(rec1[9], acc1[9], 'b^')
     ax4.plot(rec3[9], acc3[9], '^', color="orange")
     ax4.plot(rec2[9], acc2[9], 'g^')
     ax4.plot(rec0[9], acc0[9], 'r^')
-    ax4.plot(rec0[9], acc0[9], '^', color="purple")
+    ax4.plot(rec4[9], acc4[9], '^', color="purple")
     # ax2.legend()
-    # ax4.legend(fontsize=11)
+    ax4.legend(fontsize=11, bbox_to_anchor=(1.04, 0), loc="lower left")
     ax4.set_ylim(0.84, 1.0)
     ax4.set_xlim(0.60, 1.0)
     ax4.set_xlabel('recall', labelpad=0.4, fontsize=13)
@@ -593,7 +611,7 @@ def plot_thresh():
     ax4.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
     plt.tight_layout()
     # plt.subplots_adjust(wspace=0.18)
-    plt.subplots_adjust(wspace=0.18, hspace=0.3)
+    plt.subplots_adjust(wspace=0.18, hspace=0.27)
 
     plt.savefig('thresh.pdf')
 
@@ -604,11 +622,11 @@ def plot_thresh_distort():
     #              '/braindat/lab/liusl/flywire/experiment/test-3k/metric/predictions',
     #              '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/predictions',
     #              '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/predictions']
-    pred_path = ['/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/predictions']
+    pred_path = ['/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/predictions']
     list = pd.read_excel(path, header=None)
-    target_type = [2, 0, 0.5, 1]
-    threshes = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
-    # threshes = [0.5]
+    target_type = [2, 1, 0, 0.5]
+    # threshes = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+    threshes = [0.5]
     for method in pred_path:
         for thresh in threshes:
             recall_list = []
@@ -662,6 +680,16 @@ def stat_biological_recall():
                     continue
     print('bilogical edge recall: ', hit / total_positives)
 
+
+def stat_positive_samples():
+    filepath_data = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000'
+    filenames = os.listdir(filepath_data)
+    data_num = 0
+    for f in filenames:
+        path = os.path.join(filepath_data, str(f))
+        df = pd.read_csv(path, header=None)
+        data_num = data_num + len(df)
+    print(data_num)
 
 def delete_far():
     connector_path = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_vali/connector_14_7_167.csv'
