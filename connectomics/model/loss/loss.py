@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 from typing import Optional, List, Union, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -333,6 +334,7 @@ class ConnectionLoss(nn.Module):
         # positive loss: pull s_start and s_pos closer
         dist_pos_show = []
         classification_show = []
+        rank_show = []
         dist_neg_show = []
         for b in range(batch_size):
             embedding_b = embedding[b]  # (embed_dim, D, H, W)
@@ -398,6 +400,7 @@ class ConnectionLoss(nn.Module):
                     classification_show.append(True)
                 else:
                     classification_show.append(False)
+                rank_show.append(np.asarray([dist_pos_show[-1].cpu()] + list(dist_neg_show[-1].cpu())).argsort().argsort()[0])
 
                 # divided by two for double calculated loss above, for implementation convenience
                 apart_loss = apart_loss + torch.sum(F.relu(-dist_neg + self.delta_d) ** 2) / (num_id_pos * num_id_neg)
@@ -406,7 +409,7 @@ class ConnectionLoss(nn.Module):
 
         Loss = self.alpha * connect_loss + self.beta * apart_loss
         if get_distance:
-            return torch.cat(dist_pos_show), torch.cat(dist_neg_show), classification_show
+            return torch.cat(dist_pos_show), torch.cat(dist_neg_show), classification_show, rank_show
         return Loss
 
     def forward(self, pred, target, weight_mask=None, get_distance=False):

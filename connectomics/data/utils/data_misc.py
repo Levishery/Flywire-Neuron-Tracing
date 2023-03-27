@@ -101,8 +101,8 @@ def split_masks(label):
 
 def get_connection_distance(pred, target):
     func = ConnectionLoss()
-    dist_pos, dist_neg, classification = func(pred, target[0], get_distance=True)
-    return dist_pos, dist_neg, classification
+    dist_pos, dist_neg, classification, rank = func(pred, target[0], get_distance=True)
+    return dist_pos, dist_neg, classification, rank
 
 def get_connection_ranking(pred, ffn_label, seg_start, candidates):
     batch_size = pred.shape[0]

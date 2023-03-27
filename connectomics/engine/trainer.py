@@ -224,6 +224,7 @@ class Trainer(object):
             distance_pos_list = []
             distance_neg_list = []
             classification_list = []
+            rank_list = []
             for i, sample in enumerate(self.val_loader):
                 volume = sample.out_input
                 target, weight = sample.out_target_l, sample.out_weight_l
@@ -239,10 +240,11 @@ class Trainer(object):
                     loss, _ = self.criterion(pred, target, weight)
                     val_loss += loss.data
                 if self.cfg.DATASET.CONNECTOR_DATSET and not self.cfg.DATASET.MORPHOLOGY_DATSET:
-                    distance_pos, distance_neg, classification = get_connection_distance(pred, target)
+                    distance_pos, distance_neg, classification, rank = get_connection_distance(pred, target)
                     distance_neg_list.append(distance_neg)
                     distance_pos_list.append(distance_pos)
                     classification_list = classification_list + classification
+                    rank_list = rank_list + rank
                 if self.cfg.DATASET.MORPHOLOGY_DATSET:
                     TP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 1))
                     TP_total = TP_total + TP
@@ -276,8 +278,12 @@ class Trainer(object):
             if self.cfg.DATASET.CONNECTOR_DATSET and not self.cfg.DATASET.MORPHOLOGY_DATSET:
                 self.monitor.plot_distance(distance_pos_list, distance_neg_list, iter_total, name=name)
                 accuracy = sum(classification_list) / len(classification_list)
+                ave_rank = sum(rank_list) / len(rank_list)
+                print(ave_rank)
                 self.monitor.logger.log_tb.add_scalar(
                     '%s_Validation_classifaction' % name, accuracy, iter_total)
+                self.monitor.logger.log_tb.add_scalar(
+                    '%s_Validation_rank' % name, ave_rank, iter_total)
 
         if not hasattr(self, 'best_val_loss'):
             self.best_val_loss = val_loss
@@ -651,21 +657,9 @@ class Trainer(object):
                 # if self.start_iter % self.cfg.SOLVER.ITERATION_VAL == 0:  # ITERATION_VAL should be k*DATA_CHUNK_ITER
                 #     self.val_loader = build_dataloader(self.cfg, None, mode='val', dataset=self.dataset.dataset)
                 self.chunk_time = time.time()
-                self.dataset.updatechunk()
-                self.dataloader = build_dataloader(self.cfg, self.augmentor, mode,
-                                                   dataset=self.dataset.dataset)
-                self.dataloader = iter(self.dataloader)
-
-                print('chunk loading time:', time.time() - self.chunk_time)
-                print('rank:', rank)
-                print('start train for chunk %d' % chunk)
-                self.train()
-                print('finished train for chunk %d' % chunk)
-                self.start_iter += self.cfg.DATASET.DATA_CHUNK_ITER
-                del self.dataloader
-                print('chunk time:', time.time() - self.chunk_time)
                 # ITERATION_VAL should be k*DATA_CHUNK_ITER, and in main process
                 if self.is_main_process:
+                    self.start_iter=0
                     if self.dataset_val is not None and self.start_iter % self.cfg.SOLVER.ITERATION_VAL == 0:
                         self.dataset_val.volume_done = []
                         self.val_loss_total = 0
@@ -685,6 +679,19 @@ class Trainer(object):
                         if self.val_loss_total < self.best_val_loss_total:
                             self.best_val_loss_total = self.val_loss_total
                             self.save_checkpoint(chunk, is_best=True)
+                self.dataset.updatechunk()
+                self.dataloader = build_dataloader(self.cfg, self.augmentor, mode,
+                                                   dataset=self.dataset.dataset)
+                self.dataloader = iter(self.dataloader)
+
+                print('chunk loading time:', time.time() - self.chunk_time)
+                print('rank:', rank)
+                print('start train for chunk %d' % chunk)
+                self.train()
+                print('finished train for chunk %d' % chunk)
+                self.start_iter += self.cfg.DATASET.DATA_CHUNK_ITER
+                del self.dataloader
+                print('chunk time:', time.time() - self.chunk_time)
         else:
             # inference for EmbedEdgeNetwork
             num_chunk = len(self.dataset.volume_path)
