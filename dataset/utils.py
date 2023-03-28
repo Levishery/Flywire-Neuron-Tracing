@@ -8,6 +8,8 @@ import random
 import matplotlib.ticker as ticker
 from matplotlib import pyplot as plt
 import navis
+from skimage.transform import resize
+from connectomics.data.utils import readh5, writeh5
 
 z_block = 272
 y_block = 22
@@ -709,3 +711,39 @@ def delete_far():
             connector_list.drop(idx, inplace=True)
         idx = idx + 1
     connector_list.to_csv(target_path, header=False, index=False)
+
+def plot_3d(volume):
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    volume = resize(volume, [3, 64, 64, 64], order=0)
+    voxels = volume[2, :, :, :] != 0
+    colors = np.empty(voxels.shape, dtype=object)
+    colors[volume[0, :, :, :] > 0] = 'red'
+    colors[volume[1, :, :, :] > 0] = 'blue'
+    ax.voxels(voxels, facecolors=colors)
+    plt.show()
+
+def get_biological_samples():
+    h5_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-2000nm-128x128x128/testing/unknowns/xray-validation-downsample-examples.h5'
+    samples = readh5(h5_path)
+    sample_list_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-validation-downsamplemapping_result.csv'
+    edges = pd.read_csv(sample_list_path, header=None)
+    candidate_path = '/braindat/lab/liusl/x-ray/validation_candidates_2000nm'
+    if os.path.exists(candidate_path):
+        shutil.rmtree(candidate_path)
+    os.mkdir(candidate_path)
+    for i in range(len(edges)):
+        sample_name = os.path.join(candidate_path, str(edges[0][i]) + '_' + str(edges[1][i]) + '.h5')
+        if i == 1548:
+            print('check')
+        if not os.path.exists(sample_name):
+            sample_array = samples[i, :, :, :]
+            if len(np.unique(sample_array)) > 2:
+            # three_channel_array = [np.zeros(sample_array.shape), np.zeros(sample_array.shape), np.zeros(sample_array.shape)]
+            # three_channel_array[2][np.where(sample_array == 1)] = 1
+            # three_channel_array[2][np.where(sample_array == 2)] = 1
+            # three_channel_array[0][np.where(sample_array == 1)] = 1
+            # three_channel_array[1][np.where(sample_array == 2)] = 1
+            # three_channel_array = np.concatenate((np.expand_dims(three_channel_array[0], 0), np.expand_dims(three_channel_array[1], 0), np.expand_dims(three_channel_array[2], 0)))
+            # writeh5(sample_name, three_channel_array)
+                writeh5(sample_name, sample_array)

@@ -106,7 +106,7 @@ class Trainer(object):
             self.dataloader = build_dataloader(
                 self.cfg, self.augmentor, self.mode, rank=rank)
             self.dataloader = iter(self.dataloader)
-            if self.mode == 'train' and cfg.DATASET.VAL_IMAGE_NAME is not None:
+            if self.mode == 'train' and cfg.DATASET.VAL_LABEL_NAME is not None:
                 self.val_loader = build_dataloader(
                     self.cfg, None, mode='val', rank=rank)
         if self.cfg.DATASET.MORPHOLOGY_DATSET and self.cfg.MODEL.IN_PLANES > 4:
@@ -180,10 +180,9 @@ class Trainer(object):
                         GPUtil.showUtilization(all=True)
 
         # Save model
-        if (iter_total + 1) % self.cfg.SOLVER.ITERATION_SAVE == 0:
+        if (iter_total) % self.cfg.SOLVER.ITERATION_SAVE == 0:
             self.save_checkpoint(iter_total)
-
-        if (iter_total + 1) % self.cfg.SOLVER.ITERATION_VAL == 0:
+        if (iter_total) % self.cfg.SOLVER.ITERATION_VAL == 0:
             self.validate(iter_total)
 
         # update learning rate
@@ -239,24 +238,27 @@ class Trainer(object):
                         pred = self.model(volume, embedding)
                     loss, _ = self.criterion(pred, target, weight)
                     val_loss += loss.data
-                if self.cfg.DATASET.CONNECTOR_DATSET and not self.cfg.DATASET.MORPHOLOGY_DATSET:
+                if self.cfg.DATASET.CONNECTOR_DATSET and not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET):
                     distance_pos, distance_neg, classification, rank = get_connection_distance(pred, target)
                     distance_neg_list.append(distance_neg)
                     distance_pos_list.append(distance_pos)
                     classification_list = classification_list + classification
                     rank_list = rank_list + rank
-                if self.cfg.DATASET.MORPHOLOGY_DATSET:
+                if self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET:
                     TP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 1))
                     TP_total = TP_total + TP
                     FP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 0))
                     FP_total = FP_total + FP
                     FN = sum(torch.logical_and(pred.detach().cpu() < 0.5, target[0] == 1))
                     FN_total = FN_total + FN
-        name = self.dataset_val.volume_sample.split('/')[-1]
+        if self.cfg.DATASET.BIOLOGICAL_DATSET:
+            name = 'biological'
+        else:
+            name = self.dataset_val.volume_sample.split('/')[-1]
         if hasattr(self, 'monitor'):
             self.monitor.logger.log_tb.add_scalar(
                 '%s_Validation_Loss' % name, val_loss, iter_total)
-            if not self.cfg.DATASET.MORPHOLOGY_DATSET:
+            if not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET):
                 self.monitor.visualize(volume, target, pred,
                                        weight, iter_total, suffix='Val')
             else:
@@ -275,7 +277,7 @@ class Trainer(object):
                 self.monitor.logger.log_tb.add_scalar(
                     '%s_Validation_classifaction_accuracy' % name, accuracy, iter_total)
                 # self.monitor.plot_3d(pred, target, volume, iter_total, name='val', pos_data=sample.pos)
-            if self.cfg.DATASET.CONNECTOR_DATSET and not self.cfg.DATASET.MORPHOLOGY_DATSET:
+            if self.cfg.DATASET.CONNECTOR_DATSET and not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET):
                 self.monitor.plot_distance(distance_pos_list, distance_neg_list, iter_total, name=name)
                 accuracy = sum(classification_list) / len(classification_list)
                 ave_rank = sum(rank_list) / len(rank_list)

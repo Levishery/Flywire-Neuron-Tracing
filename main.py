@@ -106,7 +106,7 @@ def main():
 
     # Start training or inference:
     if cfg.DATASET.DO_CHUNK_TITLE == 0 and not cfg.DATASET.DO_MULTI_VOLUME:
-        if cfg.INFERENCE.DO_BIOLOGICAL:
+        if cfg.DATASET.BIOLOGICAL_DATSET:
             test_func = trainer.test_biological
         elif cfg.INFERENCE.DO_SINGLY:
             test_func = trainer.test_one_neuron

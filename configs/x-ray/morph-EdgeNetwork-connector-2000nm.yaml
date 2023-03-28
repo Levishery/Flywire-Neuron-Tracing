@@ -1,0 +1,67 @@
+SYSTEM:
+  NUM_GPUS: 1
+  NUM_CPUS: 2
+MODEL:
+  INPUT_SIZE: [ 16, 128, 128 ]
+  ARCHITECTURE: EdgeNetwork
+  POOLING_LAYER: True  # used in unet
+  IN_PLANES: 3
+  FILTERS: [32,48,96,192]
+  LOSS_OPTION:
+    [[ "classification_MSE" ]]
+  LOSS_WEIGHT: [[ 1.0 ]]
+  WEIGHT_OPT: [[ "0" ]]
+  OUTPUT_ACT: [[ "none"]]
+  TARGET_OPT: ["0"]
+  MIXED_PRECESION: True
+MONITOR:
+  ITERATION_NUM: [20, 20000]
+SOLVER:
+  LR_SCHEDULER_NAME: "MultiStepLR"
+  NAME: AdamW
+  ITERATION_RESTART: True
+  BASE_LR: 5e-04
+  STEPS: (30000, 60000)
+  ITERATION_SAVE: 10
+  ITERATION_TOTAL: 55000
+  ITERATION_VAL: 10
+  SAMPLES_PER_BATCH: 4 # PER GPU
+DATASET:
+  RELABEL: False
+  BIOLOGICAL_DATSET: True
+  LABEL_NAME: /braindat/lab/liusl/x-ray/train_candidates_2000nm
+  VAL_LABEL_NAME: /braindat/lab/liusl/x-ray/validation_candidates_2000nm
+  VAL_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-validation-downsamplesamples
+  INPUT_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-train-downsamplesamples
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/x-ray
+  DO_MULTI_VOLUME: False
+INFERENCE:
+  OUTPUT_ACT: ["none"]
+  SAMPLES_PER_BATCH: 64 # per gpu
+AUGMENTOR:
+  SMOOTH: False
+  MISSINGPARTS:
+    ENABLED: False
+    P: 0.1
+  MISSINGSECTION:
+    ENABLED: False
+    P: 0.3
+  CUTNOISE:
+    ENABLED: False
+  CUTBLUR:
+    ENABLED: False
+  ROTATE:
+    ENABLED: True
+  RESCALE:
+    ENABLED: True
+  FLIP:
+    ENABLED: True
+  ELASTIC:
+    ENABLED: False
+  GRAYSCALE:
+    ENABLED: True
+  MISALIGNMENT:
+    P: 0.3
+    ENABLED: False
+  MOTIONBLUR:
+    ENABLED: False
