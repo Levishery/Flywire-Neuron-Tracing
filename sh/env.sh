@@ -1,5 +1,3 @@
-export https_proxy=192.168.16.5:3128
-cp .sh/sharded.py /usr/local/lib/python3.8/dist-packages/cloudvolume/datasource/precomputed/skeleton/sharded.py
 pip install -U pip
 apt-get install tmux
 pip install connected-components-3d

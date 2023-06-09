@@ -53,7 +53,7 @@ class BiologicalDataset(torch.utils.data.Dataset):
     background: int = 0  # background label index
 
     def __init__(self, connector_list, model_input_size, iter_num: int = -1, mode='train',
-                 augmentor: AUGMENTOR_TYPE = None, label_name=None, sample_volume_size=None, test_axis=0,
+                 augmentor: AUGMENTOR_TYPE = None, label_name=None, sample_volume_size=None, test_axis=2,
                  **kwargs):
 
         assert mode in ['train', 'val', 'test']
@@ -63,15 +63,16 @@ class BiologicalDataset(torch.utils.data.Dataset):
         # data format
         self.sample_volume_size = np.asarray(sample_volume_size)
         self.model_input_size = model_input_size
-        self.connector_list = [os.path.join(connector_list[0], x) for x in os.listdir(connector_list[0])]
         if isinstance(augmentor, dict):
             self.augmentor = augmentor['augmentor_before']
             self.section_augmentor = augmentor['augmentor_after']
         else:
             self.augmentor = augmentor
-        if self.mode == 'test':
-            self.candidate_csv = self.connector_dir
+        if self.mode == 'test' or self.mode == 'val':
+            self.candidate_csv = connector_list[0]
             self.candidate = pd.read_csv(self.candidate_csv, header=None)
+        else:
+            self.connector_list = [os.path.join(connector_list[0], x) for x in os.listdir(connector_list[0])]
 
 
         # dataset: channels, depths, rows, cols
@@ -86,10 +87,10 @@ class BiologicalDataset(torch.utils.data.Dataset):
         # For relatively small volumes, the total number of samples can be generated is smaller
         # than the number of samples required for training (i.e., iteration * batch size). Thus
         # we let the __len__() of the dataset return the larger value among the two during training.
-        if self.mode == 'test':
+        if self.mode == 'test' or self.mode == 'val':
             self.iter_num = len(self.candidate)
         else:
-            self.iter_num = 50*max(
+            self.iter_num = 200*max(
                 iter_num, len(self.connector_list)) if self.mode == 'train' else len(self.connector_list)
         print('Total number of samples to be generated: ', self.iter_num)
 
@@ -108,14 +109,13 @@ class BiologicalDataset(torch.utils.data.Dataset):
             return pos_data, out_volume, out_target, out_weight
 
         elif self.mode == 'val':
-            connector = self.connector_list[index]
+            connector = self.candidate.iloc[index]
             pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample_vali(connector)
             return pos_data, out_volume, out_target, out_weight
 
         elif self.mode == 'test':
             connector = self.candidate.iloc[index]
-            # return self.get_test_sample(connector)
-            return 0
+            return self._connector_to_target_sample_test(connector)
 
 
     def _connector_to_target_sample(self, connector):
@@ -150,24 +150,20 @@ class BiologicalDataset(torch.utils.data.Dataset):
         seg_0_morph = np.expand_dims(np.array(label == 1), 0)
         seg_1_morph = np.expand_dims(np.array(label == 2), 0)
         seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
-        out_volume = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
+        if random.random() > 0.5:
+            out_volume = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
                                      seg_combined_morph.astype(np.float32)))
+        else:
+            out_volume = np.concatenate((seg_1_morph.astype(np.float32), seg_0_morph.astype(np.float32),
+                                         seg_combined_morph.astype(np.float32)))
         return [0, 0, 0, 0], out_volume, [[target]], [[np.asarray([0])]]
 
     def _connector_to_target_sample_vali(self, connector):
-        samples = pd.read_csv(connector, header=None)
         # positive
-        if random.random() > 0.7:
-            idx = 0
-        else:
-            if len(samples)>1:
-                idx = random.randint(1,len(samples)-1)
-            else:
-                idx = 0
-        id0 = samples[0][idx]
-        id1 = samples[1][idx]
+        id0 = connector[0]
+        id1 = connector[1]
         file_name = str(id0) + '_' + str(id1) + '.h5'
-        target = samples[3][idx]
+        target = connector[3]
         volume = readh5(os.path.join(self.label_name, file_name))
         if self.test_axis == 1:
             volume = np.transpose(volume, [1,0,2])
@@ -186,3 +182,26 @@ class BiologicalDataset(torch.utils.data.Dataset):
                                      seg_combined_morph.astype(np.float32)))
         return [0, 0, 0, 0], out_volume, [[target]], [[np.asarray([0])]]
 
+    def _connector_to_target_sample_test(self, connector):
+        # positive
+        id0 = connector[0]
+        id1 = connector[1]
+        file_name = str(id0) + '_' + str(id1) + '.h5'
+        target = connector[3]
+        volume = readh5(os.path.join(self.label_name, file_name))
+        if self.test_axis == 1:
+            volume = np.transpose(volume, [1,0,2])
+        elif self.test_axis == 2:
+            volume = np.transpose(volume, [2,0,1])
+        # crop and resize
+        z_width = int(self.sample_volume_size[0] * 400 / 128)
+        out_label = crop_volume(volume, [z_width, self.sample_volume_size[1], self.sample_volume_size[2]],
+                                [(volume.shape[0] - z_width) / 2, 0, 0])
+        out_label = resize(out_label, self.sample_volume_size, order=0, mode='constant', cval=0, clip=True, preserve_range=True,
+                              anti_aliasing=False)
+        seg_0_morph = np.expand_dims(np.array(out_label == 1), 0)
+        seg_1_morph = np.expand_dims(np.array(out_label == 2), 0)
+        seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
+        out_volume = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
+                                     seg_combined_morph.astype(np.float32)))
+        return [0, 0, 0, 0], out_volume, out_label, [[target]], [id0, id1]

@@ -4,16 +4,42 @@ import pandas as pd
 import os
 import shutil
 from tqdm import tqdm
+import tifffile as tf
 import random
+import imageio
+import glob
 import matplotlib.ticker as ticker
 from matplotlib import pyplot as plt
 import navis
+import h5py
+from cloudvolume.datasource.precomputed.skeleton.sharded import ShardedPrecomputedSkeletonSource
+from cloudvolume import CloudVolume
 from skimage.transform import resize
-from connectomics.data.utils import readh5, writeh5
 
 z_block = 272
 y_block = 22
 x_block = 41
+
+
+def readh5(filename, dataset=None):
+    fid = h5py.File(filename, 'r')
+    if dataset is None:
+        dataset = list(fid)[0]
+    return np.array(fid[dataset])
+
+
+def writeh5(filename, dtarray, dataset='main'):
+    fid = h5py.File(filename, 'w')
+    if isinstance(dataset, (list,)):
+        for i, dd in enumerate(dataset):
+            ds = fid.create_dataset(
+                dd, dtarray[i].shape, compression="gzip", dtype=dtarray[i].dtype)
+            ds[:] = dtarray[i]
+    else:
+        ds = fid.create_dataset(dataset, dtarray.shape,
+                                compression="gzip", dtype=dtarray.dtype)
+        ds[:] = dtarray
+    fid.close()
 
 
 def default_dump(obj):
@@ -70,7 +96,7 @@ def fafb_to_block(x, y, z, return_pixel=False):
         z_block = z_block - 1
         z_pixel = z_pixel + 26
     if return_pixel:
-        return x_block, y_block, z_block, x_pixel, y_pixel, z_pixel
+        return x_block, y_block, z_block, np.round(x_pixel), np.round(y_pixel), np.round(z_pixel)
     else:
         return x_block, y_block, z_block
 
@@ -283,6 +309,141 @@ def get_neuron_list():
     used_neurons.to_csv(used_neurons_file)
 
 
+def chunks(arr, m):
+    n = int(math.ceil(len(arr) / float(m)))
+    return [arr[i:i + n] for i in range(0, len(arr), n)]
+
+
+def reformate_image_data(process_id=0):
+    ### input dir: 84 png of 2048*2048
+    ### output dir: a h5 dataset contains the patches whose starting cord is located in the block,
+    # indexed by the cord in fafb cord
+    patch_size = np.asarray([128, 128, 16])
+    source_size = np.asarray([2048, 2048, 84]).astype(np.int)
+    target_size = np.asarray([1736, 1736, 26]).astype(np.int)
+    start_offset = ((source_size - target_size) / 2).astype(np.int)
+    png_path = '/h3cstore_nt/fafbv14_png/fafbv14'
+    target_path = '/h3cstore_nt/fafbv14_h5'
+    connector_files = chunks(os.listdir(png_path), 4)[process_id]
+
+    for img_dir in tqdm(connector_files):
+        # indexing
+        [block_x, block_y, block_z] = img_dir.split('_')[1:]
+        block_x = int(block_x)
+        block_y = int(block_y)
+        block_z = int(block_z.split('.')[0])
+        z_path = os.path.join(target_path, 'z_' + str(block_z))
+        if os.path.exists(os.path.join(z_path, img_dir + '.h5')):
+            continue
+        print('reformate block %s'%img_dir)
+        filelist = sorted(glob.glob(os.path.join(png_path, img_dir + '/*.png')))
+        start_cord = np.asarray(xpblock_to_fafb(block_z, block_y, block_x, 29, 0, 0))
+        end_cord = np.asarray(xpblock_to_fafb(block_z + 1, block_y + 1, block_x + 1, 29, 0, 0)) - np.asarray([1, 1, 1])
+        patch_offset_list, patch_cord_list = index_patch(start_cord, end_cord)
+
+        # read img
+        assert len(filelist) == 84, "%s image missing" % img_dir
+        num_imgs = len(filelist)
+        img = imageio.imread(filelist[0])
+        data = np.zeros((num_imgs, img.shape[0], img.shape[1]), dtype=np.uint8)
+        data[0] = img
+        # load all images
+        if num_imgs > 1:
+            for i in range(1, num_imgs):
+                try:
+                    data[i] = imageio.imread(filelist[i])
+                except:
+                    print("%s image corrupted" % img_dir)
+        data = np.transpose(data, [1, 2, 0])
+        data = data[start_offset[0]:, start_offset[0]:, :]
+
+        # write h5 dataset
+        os.makedirs(z_path, exist_ok=True)
+        fid = h5py.File(os.path.join(z_path, img_dir + '.h5'), 'w')
+        for patch_cord, patch_offset in zip(patch_cord_list, patch_offset_list):
+            _x, _y, _z, patch_offset_x, patch_offset_y, patch_offset_z = fafb_to_block(patch_cord[0], patch_cord[1],
+                                                                                       patch_cord[2], return_pixel=True)
+            patch = data[int(patch_offset_x):int(patch_offset_x) + patch_size[0],
+                    int(patch_offset_y):int(patch_offset_y) + patch_size[1],
+                    int(patch_offset_z):int(patch_offset_z) + patch_size[2]]
+            name = str(int(patch_cord[0])) + ',' + str(int(patch_cord[1])) + ',' + str(int(patch_cord[2]))
+            ds = fid.create_dataset(name, patch.shape, compression="gzip", dtype=patch.dtype)
+            ds[:] = patch
+
+        fid.close()
+
+
+def index_patch(start_cord, end_cord):
+    resolution = np.asarray([4, 4, 1])
+    stride_size = np.asarray([64, 64, 8]) * resolution
+    start_index = start_cord / stride_size
+    end_index = end_cord / stride_size
+    patch_offset_list = []
+    patch_cord_list = []
+
+    x = np.linspace(np.ceil(start_index[0]), np.floor(end_index[0]),
+                    int(np.floor(end_index[0]) - np.ceil(start_index[0])) + 1)
+    y = np.linspace(np.ceil(start_index[1]), np.floor(end_index[1]),
+                    int(np.floor(end_index[1]) - np.ceil(start_index[1])) + 1)
+    z = np.linspace(np.ceil(start_index[2]), np.floor(end_index[2]),
+                    int(np.floor(end_index[2]) - np.ceil(start_index[2])) + 1)
+    xv, yv, zv = np.meshgrid(x, y, z)
+
+    for ix, iy, iz in np.ndindex(xv.shape):
+        patch_cord_list.append(np.asarray([xv[ix, iy, iz], yv[ix, iy, iz], zv[ix, iy, iz]]) * stride_size)
+        assert patch_cord_list[-1][0] >= start_cord[0] and patch_cord_list[-1][0] <= end_cord[0]
+        assert patch_cord_list[-1][1] >= start_cord[1] and patch_cord_list[-1][1] <= end_cord[1]
+        assert patch_cord_list[-1][2] >= start_cord[2] and patch_cord_list[-1][2] <= end_cord[2]
+        patch_offset = (patch_cord_list[-1] - start_cord) / resolution
+        patch_offset_list.append(patch_offset.astype(np.int32))
+    return patch_offset_list, patch_cord_list
+
+
+def stat_candidate():
+    # id = 5534971521
+    id = 6719166843
+    # id =
+    vol_ffn1 = CloudVolume('file:///h3cstore_nt/fafb-ffn1', cache=True)  #
+    vol_ffn1.parallel = 8
+    vol_ffn1.meta.info['skeletons'] = 'skeletons_32nm'
+    vol_ffn1.skeleton.meta.refresh_info()
+    vol_ffn1.skeleton.meta.info['sharding']['hash'] = 'murmurhash3_x86_128'
+    vol_ffn1.skeleton = ShardedPrecomputedSkeletonSource(vol_ffn1.skeleton.meta, vol_ffn1.cache, vol_ffn1.config)
+
+    candidates = np.asarray([])
+    skel= vol_ffn1.skeleton.get(id)
+    for point in tqdm(skel.vertices):
+        candidates = np.append(candidates, bio_constrained_candidates(vol_ffn1, point, radius=500, move_back=0, use_direct=False))
+    candidates = np.unique(candidates)
+    print(len(candidates))
+    print(skel.cable_length())
+
+
+def bio_constrained_candidates(vol_ffn1, end_point, skel_vector=np.asarray([0,0,0]), radius=500, theta=30, move_back=100, use_direct=True):
+    ### a simple implementation of biological constrained candidate finding
+    end_point = end_point//[16,16,40]
+    block_shape = np.asarray([2 * (radius // 16), 2 * (radius // 16), 2 * (radius // 40)])
+    ffn_volume = vol_ffn1[end_point[0]-block_shape[0]//2:end_point[0]+block_shape[0]//2 + 1, end_point[1]-block_shape[1]//2:end_point[1]+block_shape[1]//2 + 1, end_point[2]-block_shape[2]//2:end_point[2]+block_shape[2]//2 + 1].squeeze()
+    cos_theta = math.cos(theta/360*2*math.pi)
+    mask = np.zeros(block_shape+[1,1,1])
+    center = np.asarray(mask.shape)//2
+    it = np.nditer(mask, flags=['multi_index'])
+    while not it.finished:
+        x,y,z = it.multi_index
+        it.iternext()
+        cord = np.asarray([x,y,z])
+        vector = (cord-center) * [16, 16, 40] + skel_vector*move_back
+        distance = math.sqrt(sum(vector * vector)) + 1e-4
+        if distance > radius + move_back:
+            continue
+        norm_vector = vector/distance
+        if sum(norm_vector * skel_vector) < cos_theta and use_direct:
+            continue
+        mask[x,y,z] = 1
+    candidates = np.setdiff1d(np.unique(mask*ffn_volume), 0)
+    return np.asarray(candidates)
+
+
 def stat():
     block_connector = '/braindat/lab/liusl/flywire/block_data/v2/30_percent'
     csv_list = os.listdir(block_connector)
@@ -317,11 +478,11 @@ def get_box_plot_data(labels, bp):
     for i in range(len(labels)):
         dict1 = {}
         dict1['label'] = labels[i]
-        dict1['lower_whisker'] = bp['whiskers'][i*2].get_ydata()[1]
+        dict1['lower_whisker'] = bp['whiskers'][i * 2].get_ydata()[1]
         dict1['lower_quartile'] = bp['boxes'][i].get_ydata()[1]
         dict1['median'] = bp['medians'][i].get_ydata()[1]
         dict1['upper_quartile'] = bp['boxes'][i].get_ydata()[2]
-        dict1['upper_whisker'] = bp['whiskers'][(i*2)+1].get_ydata()[1]
+        dict1['upper_whisker'] = bp['whiskers'][(i * 2) + 1].get_ydata()[1]
         rows_list.append(dict1)
 
     return pd.DataFrame(rows_list)
@@ -693,6 +854,7 @@ def stat_positive_samples():
         data_num = data_num + len(df)
     print(data_num)
 
+
 def delete_far():
     connector_path = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_vali/connector_14_7_167.csv'
     target_path = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_vali_filtered/connector_14_7_167.csv'
@@ -712,6 +874,7 @@ def delete_far():
         idx = idx + 1
     connector_list.to_csv(target_path, header=False, index=False)
 
+
 def plot_3d(volume):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -723,12 +886,49 @@ def plot_3d(volume):
     ax.voxels(voxels, facecolors=colors)
     plt.show()
 
+
+def merge_validation_files():
+    validation_files_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-validation-downsamplesamples'
+    files = [os.path.join(validation_files_path, x) for x in os.listdir(validation_files_path)]
+    merged_file = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-validation-downsamplesamples.csv'
+    for file in files:
+        rows = pd.read_csv(file, header=None)
+        rows.to_csv(merged_file, mode='a', header=False, index=False)
+
+
+def fulse_augment():
+    action = 'max'
+    file1 = '/braindat/lab/liusl/flywire/experiment/test/x-ray-3000-axis0/prediction.csv'
+    file2 = '/braindat/lab/liusl/flywire/experiment/test/x-ray-3000-axis1/prediction.csv'
+    file3 = '/braindat/lab/liusl/flywire/experiment/test/x-ray-3000-axis2/prediction.csv'
+    fulsed_file = '/braindat/lab/liusl/flywire/experiment/test/x-ray-3000_prediction-max-smooth.csv'
+    edges1 = pd.read_csv(file1, header=None)
+    edges2 = pd.read_csv(file2, header=None)
+    edges3 = pd.read_csv(file3, header=None)
+    for i in range(len(edges1)):
+        if action == 'max':
+            if np.std([edges1[4][i].item(), edges2[4][i].item(), edges3[4][i].item()]) > 0.35 and \
+                    np.sort([edges1[4][i].item(), edges2[4][i].item(), edges3[4][i].item()])[0] < 0.1:
+                value = np.mean([edges1[4][i].item(), edges2[4][i].item(), edges3[4][i].item()])
+            else:
+                value = np.max([edges1[4][i].item(), edges2[4][i].item(), edges3[4][i].item()])
+            # if value > 0.999:
+            #     value = np.mean([edges1[4][i].item(), edges2[4][i].item(), edges3[4][i].item()])
+        elif action == 'mean':
+            value = np.mean([edges1[4][i].item(), edges2[4][i].item(), edges3[4][i].item()])
+        row = pd.DataFrame(
+            [{'node0_segid': int(edges1[0][i]), 'node1_segid': int(edges1[1][i]),
+              'target': int(-1),
+              'prediction': int(-1), 'value': value}])
+        row.to_csv(fulsed_file, mode='a', header=False, index=False)
+
+
 def get_biological_samples():
-    h5_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-2000nm-128x128x128/testing/unknowns/xray-validation-downsample-examples.h5'
+    h5_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-2000nm-128x128x128/testing/unknowns/xray-test-downsample-examples.h5'
     samples = readh5(h5_path)
-    sample_list_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-validation-downsamplemapping_result.csv'
+    sample_list_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-test-downsamplemapping_result.csv'
     edges = pd.read_csv(sample_list_path, header=None)
-    candidate_path = '/braindat/lab/liusl/x-ray/validation_candidates_2000nm'
+    candidate_path = '/braindat/lab/liusl/x-ray/test_candidates_2000nm'
     if os.path.exists(candidate_path):
         shutil.rmtree(candidate_path)
     os.mkdir(candidate_path)
@@ -739,11 +939,26 @@ def get_biological_samples():
         if not os.path.exists(sample_name):
             sample_array = samples[i, :, :, :]
             if len(np.unique(sample_array)) > 2:
-            # three_channel_array = [np.zeros(sample_array.shape), np.zeros(sample_array.shape), np.zeros(sample_array.shape)]
-            # three_channel_array[2][np.where(sample_array == 1)] = 1
-            # three_channel_array[2][np.where(sample_array == 2)] = 1
-            # three_channel_array[0][np.where(sample_array == 1)] = 1
-            # three_channel_array[1][np.where(sample_array == 2)] = 1
-            # three_channel_array = np.concatenate((np.expand_dims(three_channel_array[0], 0), np.expand_dims(three_channel_array[1], 0), np.expand_dims(three_channel_array[2], 0)))
-            # writeh5(sample_name, three_channel_array)
+                # three_channel_array = [np.zeros(sample_array.shape), np.zeros(sample_array.shape), np.zeros(sample_array.shape)]
+                # three_channel_array[2][np.where(sample_array == 1)] = 1
+                # three_channel_array[2][np.where(sample_array == 2)] = 1
+                # three_channel_array[0][np.where(sample_array == 1)] = 1
+                # three_channel_array[1][np.where(sample_array == 2)] = 1
+                # three_channel_array = np.concatenate((np.expand_dims(three_channel_array[0], 0), np.expand_dims(three_channel_array[1], 0), np.expand_dims(three_channel_array[2], 0)))
+                # writeh5(sample_name, three_channel_array)
                 writeh5(sample_name, sample_array)
+
+
+def plot_ablation_xray():
+    thresh = [0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5]
+    value_w = [0.773, 0.780, 0.784, 0.787, 0.7908, 0.7915, 0.7855, 0.790, 0.7866]
+    value_wo = [0.758, 0.758, 0.758, 0.758, 0.758, 0.758, 0.758, 0.743, 0.585]
+    baseline = [0.758, 0.758, 0.758, 0.758, 0.758, 0.758, 0.758, 0.758, 0.758]
+    fig = plt.figure(figsize=(6, 4.5))
+    plt.plot(thresh, value_wo, label='without pretrain')
+    plt.plot(thresh, value_w, 'r', label='with pretrain')
+    plt.plot(thresh, baseline, '--', label='baseline')
+    plt.ylabel('validation XPRESS score')
+    plt.legend()
+    plt.xlabel('threshold')
+    plt.show()

@@ -431,33 +431,12 @@ class Trainer(object):
             self.test()
 
     def test_biological(self):
-        volume = readh5(self.cfg.DATASET.IMAGE_NAME)
-        volume_ffn1 = readh5((self.cfg.DATASET.IMAGE_NAME).replace('connector', 'ffn'))
-        mapping = readh5(self.cfg.DATASET.LABEL_NAME, 'original')
-        edges = readh5((self.cfg.DATASET.LABEL_NAME).replace('mapping.h5', '.h5').replace('segmentationsfafb', 'fafb'))
-        csv_path = (self.cfg.DATASET.IMAGE_NAME).replace('.h5', '.csv')
-        result_csv_path = csv_path.replace('.csv', '_result.csv')
-
-        # get csv file
-        # for edge in tqdm(edges):
-        #     seg_start = mapping[edge[3] - 1]
-        #     seg_candidate = mapping[edge[4] - 1]
-        #     cord = np.asarray([edge[0], edge[1], edge[2]]) - np.asarray([8, 64, 64])
-        #     upper_bound = np.asarray([volume.shape[2], volume.shape[1], volume.shape[0]]) - np.asarray([16, 128, 128])
-        #     cord = [np.clip(cord[0], 0, upper_bound[0]), np.clip(cord[1], 0, upper_bound[1]), np.clip(cord[2], 0, upper_bound[2])]
-        #     row = pd.DataFrame(
-        #         [{'node0_segid': int(seg_start), 'node1_segid': int(seg_candidate), 'cord': cord, 'target': -1,
-        #           'prediction': -1}])
-        #     row.to_csv(csv_path, mode='a', header=False, index=False)
-        # stat_biological_recall(csv_path)
-
-        dataset = ConnectorDataset(connector_path=csv_path, volume=volume, vol_ffn1=volume_ffn1,
-                                   mode=self.mode,
-                                   iter_num=-1, model_input_size=self.cfg.MODEL.INPUT_SIZE,
-                                   sample_volume_size=self.cfg.MODEL.INPUT_SIZE)
-        self.dataloader = build_dataloader(self.cfg, self.augmentor, self.mode, dataset, self.rank)
-        self.dataloader = iter(self.dataloader)
+        r"""Inference function of the trainer class.
+        """
+        self.model.eval() if self.cfg.INFERENCE.DO_EVAL else self.model.train()
+        print("Total number of batches: ", len(self.dataloader))
         start = time.perf_counter()
+        visualize_csv_path = os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'prediction.csv')
         with torch.no_grad():
             for i, sample in enumerate(self.dataloader):
                 print('progress: %d/%d batches, total time %.2fs' %
@@ -466,15 +445,23 @@ class Trainer(object):
                 volume = sample.out_input
                 target = torch.tensor(np.expand_dims(np.asarray(sample.seg_start), axis=1))
                 ids = sample.candidates
-                volume, embedding = self.get_morph_input(volume)
+                # visualize(volume, sample.out_input, index=22, mask=True)
+                # prediction
                 with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
                     volume = volume.contiguous().to(self.device, non_blocking=True)
                     pred = self.model(volume)
-                for idx in range(len(target)):
-                    row = pd.DataFrame(
-                        [{'node0_segid': int(ids[idx][0]), 'node1_segid': int(ids[idx][1]),
-                          'target': int(target[idx] == 1), 'value': pred.detach().cpu()[idx].item()}])
-                    row.to_csv(result_csv_path, mode='a', header=False, index=False)
+                pred_record = pred.detach().cpu()
+                if visualize_csv_path is not None:
+                    for idx in range(len(target)):
+                        row = pd.DataFrame(
+                            [{'node0_segid': int(ids[idx][0]), 'node1_segid': int(ids[idx][1]),
+                              'target': int(target[idx] == 1),
+                              'prediction': int((pred_record > 0.5)[idx]), 'value': pred_record[idx].item()}])
+                        row.to_csv(visualize_csv_path, mode='a', header=False, index=False)
+                        if int(ids[idx][0]) == 1748861391 and int(ids[idx][1]) == 1254097546:
+                            print('debug')
+                if torch.cuda.is_available() and i % 50 == 0:
+                    GPUtil.showUtilization(all=True)
 
     # -----------------------------------------------------------------------------
     # Misc functions

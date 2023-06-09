@@ -289,6 +289,9 @@ def get_dataset(cfg,
         if mode == 'val':
             dir_name = _get_file_list(cfg.DATASET.VAL_PATH)
             dataset = BiologicalDataset(dir_name, label_name=cfg.DATASET.VAL_LABEL_NAME, **shared_kwargs)
+        elif mode == 'test':
+            dir_name = _get_file_list(cfg.INFERENCE.INPUT_PATH)
+            dataset = BiologicalDataset(dir_name, label_name=cfg.INFERENCE.IMAGE_NAME, **shared_kwargs)
         else:
             dir_name = _get_file_list(cfg.DATASET.INPUT_PATH)
             dataset = BiologicalDataset(dir_name, label_name=cfg.DATASET.LABEL_NAME, **shared_kwargs)

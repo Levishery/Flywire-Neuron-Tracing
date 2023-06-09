@@ -31,13 +31,19 @@ DATASET:
   BIOLOGICAL_DATSET: True
   LABEL_NAME: /braindat/lab/liusl/x-ray/train_candidates_2000nm
   VAL_LABEL_NAME: /braindat/lab/liusl/x-ray/validation_candidates_2000nm
-  VAL_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-validation-downsamplesamples
+  VAL_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-validation-downsamplesamples.csv
   INPUT_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-train-downsamplesamples
   OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/x-ray
   DO_MULTI_VOLUME: False
 INFERENCE:
   OUTPUT_ACT: ["none"]
   SAMPLES_PER_BATCH: 64 # per gpu
+  # test
+#  IMAGE_NAME: /braindat/lab/liusl/x-ray/test_candidates_2000nm
+#  INPUT_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-test-downsamplemapping_result.csv
+  # validation
+  IMAGE_NAME: /braindat/lab/liusl/x-ray/validation_candidates_2000nm
+  INPUT_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-validation-downsamplemapping_result.csv
 AUGMENTOR:
   SMOOTH: False
   MISSINGPARTS:
