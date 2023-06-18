@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import scipy.sparse as sparse
 import h5py
@@ -516,7 +518,7 @@ def confusion_matrix_visualize(pred, gt, thres=0.5):
     img_colored = img_colored.transpose((1, 2, 3, 0))  # # c,z,y,x - > z,y,x,c
     return img_colored
 
-def emb2rgb(x_emb):
+def emb2rgb_img(x_emb):
     x_emb = x_emb.squeeze(0)
     x_emb = np.array(x_emb.cpu())
     shape = x_emb.shape
@@ -538,13 +540,22 @@ def emb2rgb_dim5(x_emb):
     new_emb = new_emb.reshape(shape[-3], shape[-2], shape[-1], 3)
     return new_emb
 
-def visualize(embedding, volume, index, mask=True):
-    show = embedding[index, 3:, :, :, :].unsqueeze(0)
-    mask = np.asarray(embedding[index, 2, :, :, :].clone().detach().cpu())
-    x = np.asarray(emb2rgb_dim5(show))
-    y = (x - x.min()) / (x.max() - x.min()) * 240
-    tf.imsave('/braindat/lab/liusl/flywire/block_data/v2/visualize/embedding.tif', y.astype(np.uint8))
-    x = np.asarray(volume[index, 0, :, :, :].clone().detach().cpu())
-    x = (x - x.min()) / (x.max() - x.min()) * 240
-    x = x*mask*0.3 + x*0.7
-    tf.imsave('/braindat/lab/liusl/flywire/block_data/v2/visualize/volume.tif', x.astype(np.uint8))
+def visualize(embedding, volume, index, mask=True, dir_path='/braindat/lab/liusl/flywire/block_data/v2/visualize/', name='show_'):
+    if mask:
+        show = embedding[index, 3:, :, :, :].unsqueeze(0)
+        mask = np.asarray(embedding[index, 2, :, :, :].clone().detach().cpu())
+        x = np.asarray(emb2rgb_dim5(show))
+        y = (x - x.min()) / (x.max() - x.min()) * 240
+        tf.imsave(os.path.join(dir_path, name+'embedding.tif'), y.astype(np.uint8))
+        x = np.asarray(volume[index, 0, :, :, :].clone().detach().cpu())
+        x = (x - x.min()) / (x.max() - x.min()) * 240
+        x = x*mask*0.3 + x*0.7
+        tf.imsave(os.path.join(dir_path, name+'volume.tif'), x.astype(np.uint8))
+    else:
+        show = embedding[index, :, :, :, :].unsqueeze(0)
+        x = np.asarray(emb2rgb_dim5(show))
+        y = (x - x.min()) / (x.max() - x.min()) * 240
+        tf.imsave(os.path.join(dir_path, name+'embedding.tif'), y.astype(np.uint8))
+        x = np.asarray(volume[index, 0, :, :, :].clone().detach().cpu())
+        x = (x - x.min()) / (x.max() - x.min()) * 240
+        tf.imsave(os.path.join(dir_path, name+'volume.tif'), x.astype(np.uint8))

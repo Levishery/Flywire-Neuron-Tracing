@@ -318,7 +318,7 @@ def reformate_image_data(process_id=0):
     ### input dir: 84 png of 2048*2048
     ### output dir: a h5 dataset contains the patches whose starting cord is located in the block,
     # indexed by the cord in fafb cord
-    patch_size = np.asarray([128, 128, 16])
+    patch_size = np.asarray([129, 129, 17])
     source_size = np.asarray([2048, 2048, 84]).astype(np.int)
     target_size = np.asarray([1736, 1736, 26]).astype(np.int)
     start_offset = ((source_size - target_size) / 2).astype(np.int)

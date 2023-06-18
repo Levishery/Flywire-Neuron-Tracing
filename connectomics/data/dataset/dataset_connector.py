@@ -522,6 +522,13 @@ class ConnectorDataset(torch.utils.data.Dataset):
         return pos, out_volume, out_label, connector[3], [seg_start, seg_candidate]
 
     def make_test_samples(self, connector):
+        """
+        given positive connector samples, get test negative samples
+        Args:
+            connector:
+        Returns:
+            None
+        """
         num_negative = 4
         self.record_path = self.connector_path.replace('30_percent_test_3000', '30_percent_test_3000_reformat')
         self.record_path = self.connector_path.replace('30_percent_train_1000', '30_percent_train_1000_reformat')
