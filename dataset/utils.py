@@ -8,6 +8,7 @@ import tifffile as tf
 import random
 import imageio
 import glob
+from queue import Queue,LifoQueue,PriorityQueue
 import matplotlib.ticker as ticker
 from matplotlib import pyplot as plt
 import navis
@@ -962,3 +963,141 @@ def plot_ablation_xray():
     plt.legend()
     plt.xlabel('threshold')
     plt.show()
+
+
+def visualize_pc():
+    import open3d as o3d
+    path = r"‪F:\flywire数据\pc\1758404938_8122092051.ply"
+    # 读取文件
+    pcd = o3d.io.read_point_cloud(path)  # path为文件路径
+
+    pcd_new = o3d.geometry.PointCloud.uniform_down_sample(pcd, 1)
+    o3d.visualization.draw_geometries([pcd_new])
+
+
+def partition_once(skel, p_vectors, p_cords, method='branch'):
+    """
+    partition the skel once and record partition information
+    Input: segment skel to partition, partition cords & vectors
+    parameters: method = 'branch' or 'longest_path'
+    Returns: partitioned skel
+
+    """
+    if method == 'branch':
+        main_branchpoint = navis.find_main_branchpoint(skel, method='longest_neurite')
+        main_branchpoint = main_branchpoint[0] if isinstance(main_branchpoint, list) else main_branchpoint
+        childs = list(skel.nodes[skel.nodes.parent_id == main_branchpoint].node_id.values)
+        assert len(childs) == 2, "branch point contains more than 2 child"
+        try:
+            split = navis.cut_skeleton(skel, [childs[0], main_branchpoint])
+        except:
+            skel = navis.reroot_skeleton(skel, childs[1])
+            split = navis.cut_skeleton(skel, [childs[0], main_branchpoint])
+        child = childs[0]
+        grand_child = skel.nodes[skel.nodes.parent_id == child].node_id.values[0]
+        p_cords_child = np.asarray([skel.nodes['x'][skel.nodes['node_id'] == child].item() / 4,
+                                    skel.nodes['y'][skel.nodes['node_id'] == child].item() / 4,
+                                    skel.nodes['z'][skel.nodes['node_id'] == child].item() / 40])
+        p_cords_grandchild = np.asarray([skel.nodes['x'][skel.nodes['node_id'] == grand_child].item() / 4,
+                                         skel.nodes['y'][skel.nodes['node_id'] == grand_child].item() / 4,
+                                         skel.nodes['z'][skel.nodes['node_id'] == grand_child].item() / 40])
+        p_vector = p_cords_grandchild - p_cords_child
+        p_cord = (p_cords_child + p_cords_grandchild) / 2
+        p_vectors.append(p_vector)
+        p_cords.append(p_cord)
+
+        child = childs[1]
+        grand_child = skel.nodes[skel.nodes.parent_id == child].node_id.values[0]
+        p_cords_child = np.asarray([skel.nodes['x'][skel.nodes['node_id'] == child].item() / 4,
+                                    skel.nodes['y'][skel.nodes['node_id'] == child].item() / 4,
+                                    skel.nodes['z'][skel.nodes['node_id'] == child].item() / 40])
+        p_cords_grandchild = np.asarray([skel.nodes['x'][skel.nodes['node_id'] == grand_child].item() / 4,
+                                         skel.nodes['y'][skel.nodes['node_id'] == grand_child].item() / 4,
+                                         skel.nodes['z'][skel.nodes['node_id'] == grand_child].item() / 40])
+        p_vector = p_cords_grandchild - p_cords_child
+        p_cord = (p_cords_child + p_cords_grandchild) / 2
+        p_vectors.append(p_vector)
+        p_cords.append(p_cord)
+
+        cut_point = main_branchpoint
+
+    elif method == 'longest_path':
+        # Find the two most distal points
+        leafs = skel.leafs.node_id.values
+        dists = navis.geodesic_matrix(skel, from_=leafs)[leafs]
+
+        # This might be multiple values
+        mx = np.where(dists == np.max(dists.values))
+        start = dists.columns[mx[0][0]]
+
+        # Reroot to one of the nodes that gives the longest distance
+        skel.reroot(start, inplace=True)
+        if isinstance(skel, navis.NeuronList): skel = skel[0]
+        segments = navis.graph_utils._generate_segments(skel, weight='weight')
+        longest_path = segments[0]
+        cut_point = longest_path[int(len(longest_path)/2)]
+        split = navis.cut_skeleton(skel, cut_point)
+
+        child = cut_point
+        grand_child = skel.nodes[skel.nodes.parent_id == child].node_id.values[0]
+        p_cords_child = np.asarray([skel.nodes['x'][skel.nodes['node_id'] == child].item() / 4,
+                                    skel.nodes['y'][skel.nodes['node_id'] == child].item() / 4,
+                                    skel.nodes['z'][skel.nodes['node_id'] == child].item() / 40])
+        p_cords_grandchild = np.asarray([skel.nodes['x'][skel.nodes['node_id'] == grand_child].item() / 4,
+                                         skel.nodes['y'][skel.nodes['node_id'] == grand_child].item() / 4,
+                                         skel.nodes['z'][skel.nodes['node_id'] == grand_child].item() / 40])
+        p_vector = p_cords_grandchild - p_cords_child
+        p_cord = (p_cords_child + p_cords_grandchild) / 2
+        p_vectors.append(p_vector)
+        p_cords.append(p_cord)
+
+    else:
+        raise ValueError("Invalid method")
+
+    # visulize cut point
+    fig, ax = navis.plot2d(skel, method='2d', view=('x', '-y'))
+    cut_coords = skel.nodes.set_index('node_id').loc[cut_point, ['x', 'y']].values
+    ax.annotate('cut point',
+                xy=(cut_coords[0], -cut_coords[1]),
+                color='red',
+                xytext=(cut_coords[0], -cut_coords[1] - 2000), va='center', ha='center',
+                arrowprops=dict(shrink=0.1, width=2, color='red'),
+                )
+    plt.show()
+
+    return split
+
+
+def segment_partition():
+    """
+    Input: segment id, partition cords & vectors
+    Returns: partition segment point cloud
+
+    """
+    navis.patch_cloudvolume()
+    segment_id = 4098055229
+    vol_ffn1 = CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0', cache=True)  #
+    vol_ffn1.parallel = 8
+    vol_ffn1.meta.info['skeletons'] = 'skeletons_32nm'
+    vol_ffn1.skeleton.meta.refresh_info()
+    vol_ffn1.skeleton.meta.info['sharding']['hash'] = 'murmurhash3_x86_128'
+    vol_ffn1.skeleton = ShardedPrecomputedSkeletonSource(vol_ffn1.skeleton.meta, vol_ffn1.cache, vol_ffn1.config)
+    skel = vol_ffn1.skeleton.get(segment_id, as_navis=True)
+
+    # cut the first and second child with their grand child
+    # raw voxel cord
+    p_vectors = []
+    p_cords = []
+    skel_queue = Queue(maxsize=0)
+    skel_queue.put(skel)
+    while not skel_queue.empty():
+        skel = skel_queue.get()
+        splits = partition_once(skel, p_vectors, p_cords, method='branch')
+        for s in splits:
+            s.to_swc(os.path.join('/braindat/lab/liusl/flywire/log', str(s.cable_length) + '.swc'))
+        # assert len(splits) == 3, "result in more than three branches"
+        for split in splits:
+            if split.cable_length > 100000:
+                skel_queue.put(split)
+
+    print(p_cords, p_vectors)

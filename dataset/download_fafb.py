@@ -6,6 +6,7 @@ import math
 from glob import glob
 import numpy as np
 import signal
+import random
 import shutil
 from PIL import Image
 
@@ -157,6 +158,64 @@ def download():
                 for i in range(84):
                     im = Image.fromarray(volume[:, :, i, 0])
                     im.save(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14', os.path.join(folder_name, str(i).zfill(4)+'.png')))
+
+
+def download_mip0():
+    fafb_v14 = cloudvolume.CloudVolume('https://storage.googleapis.com/neuroglancer-fafb-data/fafb_v14/fafb_v14_orig/',
+                                       mip=0, progress=True)
+    df = pd.read_csv('/braindat/lab/liusl/flywire/block_data/30_percent.csv')
+    while True:
+        # sample informative blocks from 1~10000
+        i = random.randint(1, 10000)
+        file_name = df['block'][i]
+        folder_name = file_name.split('.')[0]
+        if not os.path.exists(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14_mip0', folder_name)):
+            [block_x, block_y, block_z] = file_name.split('_')[1:]
+            block_x = int(block_x)
+            block_y = int(block_y)
+            block_z = int(block_z.split('.')[0])
+            (start_x, start_y, start_z) = xpblock_to_fafb(block_z, block_y, block_x, 29, 434, 434)
+            (end_x, end_y, end_z) = xpblock_to_fafb(block_z, block_y, block_x, 54, 1301, 1301)
+            print('begin dowload: ', file_name)
+            try:
+                volume = fafb_v14[start_x:end_x+1, start_y:end_y+1, start_z:end_z+1]
+            except:
+                print('fail to download', file_name)
+                continue
+            os.makedirs(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14_mip0', folder_name))
+            print(volume.shape)
+            for i in range(26):
+                im = Image.fromarray(volume[:, :, i, 0])
+                im.save(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14_mip0', os.path.join(folder_name, str(i).zfill(4)+'.png')))
+
+
+def download_mip1():
+    fafb_v14 = cloudvolume.CloudVolume('https://storage.googleapis.com/neuroglancer-fafb-data/fafb_v14/fafb_v14_orig/',
+                                       mip=1, progress=True)
+    df = pd.read_csv('/braindat/lab/liusl/flywire/block_data/30_percent.csv')
+    while True:
+        # sample informative blocks from 1~10000
+        i = random.randint(1, 10000)
+        file_name = df['block'][i]
+        folder_name = file_name.split('.')[0]
+        if not os.path.exists(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14_mip1', folder_name)):
+            [block_x, block_y, block_z] = file_name.split('_')[1:]
+            block_x = int(block_x)
+            block_y = int(block_y)
+            block_z = int(block_z.split('.')[0])
+            (start_x, start_y, start_z) = xpblock_to_fafb(block_z, block_y, block_x, 29, 0, 0)
+            (end_x, end_y, end_z) = xpblock_to_fafb(block_z, block_y, block_x, 54, 1735, 1735)
+            print('begin dowload: ', file_name)
+            try:
+                volume = fafb_v14[start_x/2:end_x/2+2, start_y/2:end_y/2+2, start_z:end_z+1]
+            except:
+                print('fail to download', file_name)
+                continue
+            os.makedirs(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14_mip1', folder_name))
+            print(volume.shape)
+            for i in range(26):
+                im = Image.fromarray(volume[:, :, i, 0])
+                im.save(os.path.join('/braindat/lab/liusl/flywire/block_data/fafbv14_mip1', os.path.join(folder_name, str(i).zfill(4)+'.png')))
 
 
 def zfill_folders(path):
