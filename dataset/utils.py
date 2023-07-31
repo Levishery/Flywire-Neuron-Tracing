@@ -191,6 +191,19 @@ def sample_by_block():
             #                 df.to_csv(file_name, mode='a', header=True, index=False)
 
 
+def stat_grow():
+    block_connector = '/braindat/lab/liusl/flywire/test-skel/PointDETR/grow_vector'
+    connector_files = os.listdir(block_connector)
+    visualization_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/visualization'
+    grow_count = 0
+    segment_count = 0
+    for connector_f in tqdm(connector_files):
+        df = pd.read_csv(os.path.join(block_connector, connector_f),index_col=False, header=None)
+        grow_count = grow_count + len(df)
+        segment_count = segment_count + len(np.unique(df[0]))
+    print(grow_count/segment_count)
+
+
 def sample_by_neuron():
     target_tree_path = '/braindat/lab/liusl/flywire/test-skel/tree_data'
     target_connector_path = '/braindat/lab/liusl/flywire/test-skel/connector_data'

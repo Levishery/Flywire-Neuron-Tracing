@@ -512,9 +512,23 @@ class Trainer(object):
         return
 
     def test_patch(self, mode: str, rank=None):
-        r"""Get test patch from h5 files, compute and save image embedding
+        r"""Get test patch from h5 files, compute and save image embedding with point location
+        input: point clouds
+        output: point clouds with image embeddings
         """
-        patch_path = '/h3cstore_nt/fafbv14_h5/z_127/connector_21_9_127.h5'
+
+        pc_path = '/h3cstore_nt/point_cloud/720575940617710656'
+        pc_files = os.listdir(pc_path)
+        patch_index_list = []
+        for pc_file in pc_files:
+            pc = PlyData.read(os.path.join(pc_path, pc_file))
+            x = pc.elements[0].data['x']
+            y = pc.elements[0].data['y']
+            z = pc.elements[0].data['z']
+            cords = np.transpose(np.asarray([x, y, z]) / np.expand_dims(np.asarray([4, 4, 40]), axis=1),
+                                 [1, 0])
+
+        patch_path = '/h3cstore_nt/fafbv14_h5/'
         img_z_path = os.path.dirname(os.path.abspath(patch_path))
         embedding_dir = '=fafbv14_embeddings'
         img_dir = 'fafbv14_h5'
