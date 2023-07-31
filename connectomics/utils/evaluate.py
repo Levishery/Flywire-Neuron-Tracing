@@ -1,9 +1,11 @@
 import os
-
+import networkx as nx
 import numpy as np
+import navis
 import scipy.sparse as sparse
 import h5py
 import tifffile as tf
+from connectomics.utils.run_length import expected_run_length
 from scipy import ndimage
 
 __all__ = [
@@ -78,6 +80,7 @@ def adapted_rand(seg, gt, all_stats=False):
         return (are, precision, recall)
     else:
         return are
+
 
 # Evaluation code courtesy of Juan Nunez-Iglesias, taken from
 # https://github.com/janelia-flyem/gala/blob/master/gala/evaluate.py
@@ -203,12 +206,12 @@ def vi_tables(x, y=None, ignore_x=[0], ignore_y=[0]):
     lpygx = np.zeros(np.shape(px))
     lpygx[nzx] = xlogx(divide_rows(nzpxy, nzpx)).sum(axis=1).ravel()
     # \sum_x{p_{y|x} \log{p_{y|x}}}
-    hygx = -(px*lpygx)  # \sum_x{p_x H(Y|X=x)} = H(Y|X)
+    hygx = -(px * lpygx)  # \sum_x{p_x H(Y|X=x)} = H(Y|X)
 
     lpxgy = np.zeros(np.shape(py))
     lpxgy[nzy] = xlogx(divide_columns(nzpxy, nzpy)).sum(axis=0).ravel()
-    hxgy = -(py*lpxgy)
- 
+    hxgy = -(py * lpxgy)
+
     return [pxy] + list(map(np.asarray, [px, py, hxgy, hygx, lpygx, lpxgy]))
 
 
@@ -363,6 +366,7 @@ def xlogx(x, out=None, in_place=False):
     z[nz] *= np.log2(z[nz])
     return y
 
+
 # Functions for evaluating binary segmentation
 
 
@@ -396,10 +400,10 @@ def get_binary_jaccard(pred, gt, thres=[0.5]):
         assert 0.0 < t < 1.0, "The range of the threshold should be (0,1)."
         TP, FP, TN, FN = confusion_matrix(pred, gt, t)
 
-        precision = float(TP)/(TP+FP)
-        recall = float(TP)/(TP+FN)
-        iou_fg = float(TP)/(TP+FP+FN)
-        iou_bg = float(TN)/(TN+FP+FN)
+        precision = float(TP) / (TP + FP)
+        recall = float(TP) / (TP + FN)
+        iou_fg = float(TP) / (TP + FP + FN)
+        iou_bg = float(TN) / (TN + FP + FN)
         iou = (iou_fg + iou_bg) / 2.0
         score[tid] = np.array([iou_fg, iou, precision, recall])
     return score
@@ -410,6 +414,7 @@ def cremi_distance(pred, gt, resolution=(40.0, 4.0, 4.0)):
        in the CREMI challenge (https://cremi.org/). Both inputs (pred, gt) need 
        to be of the same size.
     """
+
     def count_false_positives(test_clefts_mask, truth_clefts_edt, threshold=200):
         mask1 = np.invert(test_clefts_mask)
         mask2 = truth_clefts_edt > threshold
@@ -518,6 +523,7 @@ def confusion_matrix_visualize(pred, gt, thres=0.5):
     img_colored = img_colored.transpose((1, 2, 3, 0))  # # c,z,y,x - > z,y,x,c
     return img_colored
 
+
 def emb2rgb_img(x_emb):
     x_emb = x_emb.squeeze(0)
     x_emb = np.array(x_emb.cpu())
@@ -528,6 +534,7 @@ def emb2rgb_img(x_emb):
     new_emb = pca.fit_transform(x_emb)
     new_emb = new_emb.reshape(shape[-2], shape[-1], 3)
     return new_emb
+
 
 def emb2rgb_dim5(x_emb):
     x_emb = x_emb.squeeze(0)
@@ -540,22 +547,183 @@ def emb2rgb_dim5(x_emb):
     new_emb = new_emb.reshape(shape[-3], shape[-2], shape[-1], 3)
     return new_emb
 
-def visualize(embedding, volume, index, mask=True, dir_path='/braindat/lab/liusl/flywire/block_data/v2/visualize/', name='show_'):
+
+def visualize(embedding, volume, index, mask=True, dir_path='/braindat/lab/liusl/flywire/block_data/v2/visualize/',
+              name='show_'):
     if mask:
         show = embedding[index, 3:, :, :, :].unsqueeze(0)
         mask = np.asarray(embedding[index, 2, :, :, :].clone().detach().cpu())
         x = np.asarray(emb2rgb_dim5(show))
         y = (x - x.min()) / (x.max() - x.min()) * 240
-        tf.imsave(os.path.join(dir_path, name+'embedding.tif'), y.astype(np.uint8))
+        tf.imsave(os.path.join(dir_path, name + 'embedding.tif'), y.astype(np.uint8))
         x = np.asarray(volume[index, 0, :, :, :].clone().detach().cpu())
         x = (x - x.min()) / (x.max() - x.min()) * 240
-        x = x*mask*0.3 + x*0.7
-        tf.imsave(os.path.join(dir_path, name+'volume.tif'), x.astype(np.uint8))
+        x = x * mask * 0.3 + x * 0.7
+        tf.imsave(os.path.join(dir_path, name + 'volume.tif'), x.astype(np.uint8))
     else:
         show = embedding[index, :, :, :, :].unsqueeze(0)
         x = np.asarray(emb2rgb_dim5(show))
         y = (x - x.min()) / (x.max() - x.min()) * 240
-        tf.imsave(os.path.join(dir_path, name+'embedding.tif'), y.astype(np.uint8))
+        tf.imsave(os.path.join(dir_path, name + 'embedding.tif'), y.astype(np.uint8))
         x = np.asarray(volume[index, 0, :, :, :].clone().detach().cpu())
         x = (x - x.min()) / (x.max() - x.min()) * 240
-        tf.imsave(os.path.join(dir_path, name+'volume.tif'), x.astype(np.uint8))
+        tf.imsave(os.path.join(dir_path, name + 'volume.tif'), x.astype(np.uint8))
+
+def build_neuron_segment_graph():
+    import cloudvolume
+    import tqdm
+
+    fafb_ffn1_20190805 = cloudvolume.CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0', cache=True, parallel=True)
+    skel_path = '/braindat/lab/liusl/flywire/fafb-public-skeletons'
+    skels = []
+    # import urllib
+    #
+    # for file in os.listdir(skel_path):
+    #     if file.isdigit():
+    #         skel16_url = 'https://storage.googleapis.com/fafb-ffn1/fafb-public-skeletons/' + file
+    #         with urllib.request.urlopen(skel16_url) as source:
+    #             skels.append(cloudvolume.Skeleton.from_precomputed(source.read(), segid=int(file)))
+    # for i, skel in enumerate(skels):
+    #     with open(os.path.join(skel_path, str(skel.id) + '.swc'), 'wt') as f:
+    #         f.write(skel.to_swc())
+
+    neurons = []
+    for file in os.listdir(skel_path):
+        if '.swc' in file:
+            path = os.path.join(skel_path, file)
+            with open(path, 'r') as f:
+                skel = cloudvolume.Skeleton.from_swc(f.read())
+                skel.segid=int(file.split('.')[0])
+                skels.append(skel)
+            neuron = navis.read_swc(path)
+            neurons.append(neuron)
+
+    import collections
+    from concurrent import futures
+    import numpy as np
+    from tqdm import tqdm
+    import pickle
+    # import funlib.evaluate
+
+    class PointLoader(object):
+        """Build up a list of points, then load them batched by storage chunk."""
+
+        def __init__(self, cloud_volume):
+            """Initializes with zero points; see add_points to queue some."""
+            self._volume = cloud_volume
+            self._chunk_map = collections.defaultdict(set)
+
+        def add_points(self, points):
+            """Add more points to be loaded.
+
+            Args:
+              points: iterable of XYZ iterables, e.g. Nx3 ndarray.  Assumed to be in
+                  absolute units relative to volume.scale['resolution'].
+            """
+            points = np.array(points)
+            resolution = np.array(self._volume.scale['resolution'])
+            chunk_size = np.array(self._volume.scale['chunk_sizes'])
+            chunk_starts = (points // resolution).astype(int) // chunk_size * chunk_size
+            for point, chunk_start in zip(points, chunk_starts):
+                self._chunk_map[tuple(chunk_start)].add(tuple(point))
+
+        def _load_chunk(self, chunk_start):
+            # (No validation that this is a valid chunk_start.)
+            chunk_size = np.array(self._volume.scale['chunk_sizes'])[0]
+            chunk_end = chunk_start + chunk_size
+            return self._volume[
+                   chunk_start[0]:chunk_end[0],
+                   chunk_start[1]:chunk_end[1],
+                   chunk_start[2]:chunk_end[2]]
+
+        def _load_points(self, chunk_map_key):
+            chunk_start = np.array(chunk_map_key)
+            points = np.array(list(self._chunk_map[chunk_map_key]))
+            resolution = np.array(self._volume.scale['resolution'])
+            indices = (points // resolution).astype(int) - chunk_start
+            chunk = self._load_chunk(chunk_start)
+            return points, chunk[indices[:, 0], indices[:, 1], indices[:, 2]]
+
+        def load_all(self, max_workers=4):
+            """Load all points in current list, batching by storage chunk.
+
+            Args:
+              max_workers: the max number of workers for parallel chunk requests.
+
+            Returns:
+              (points, data): parallel Numpy arrays of the requested points from all
+                  cumulative calls to add_points, and the corresponding data loaded from
+                  volume.
+            """
+            # progress_state = self._volume.progress
+            # self._volume.progress = False
+            # pbar = tqdm.notebook.tqdm(total=len(self._chunk_map), desc='loading chunks')
+            # with futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+            #     point_futures = [ex.submit(self._load_points, k) for k in self._chunk_map]
+            #     for f in futures.as_completed(point_futures):
+            #         pbar.update(1)
+            # self._volume.progress = progress_state
+            # pbar.close()
+            #
+            # results = [f.result() for f in point_futures]
+            results = []
+            for k in tqdm(self._chunk_map):
+                results.append(self._load_points(k))
+            points = np.concatenate([result[0] for result in results])
+            data = np.concatenate([result[1] for result in results])
+            return points, data
+    graph = nx.Graph()
+    for i in range(len(skels)):
+        skel = skels[i]
+        neuron = neurons[i]
+        neuron_graph = neuron.get_graph_nx().to_undirected()
+        pl = PointLoader(fafb_ffn1_20190805)
+        pl.add_points(skel.vertices)
+        loaded_points, loaded_data = pl.load_all(max_workers=1)
+        node_segid_dict = {}
+        node_pos_dict = {}
+        for point, segid in zip(loaded_points, loaded_data):
+            node = neuron.nodes['node_id'][(neuron.nodes['x']==point[0]) & (neuron.nodes['y']==point[1]) & (neuron.nodes['z']==point[2])]
+            if len(node) != 1:
+                print('debug')
+            node_segid_dict[node.item()] = segid
+            # node_pos_dict[node.item()] = np.array([point[2], point[1], point[0]])
+            node_pos_dict[node.item()] = np.array(point)
+        nx.set_node_attributes(neuron_graph, node_segid_dict, 'seg_label')
+        nx.set_node_attributes(neuron_graph, node_pos_dict, 'zyx_coord')
+        nx.set_node_attributes(neuron_graph, int(neuron.name), 'skeleton_id')
+        # for node, attr in neuron_graph.nodes(data=True):
+        #     print(attr['seg_label'], attr['zyx_coord']/np.array([4,4,40]))
+        #     print(neuron_graph[node])
+        # mapping the nodes to a isolated graph
+        if len(graph)>0:
+            mapping = dict(zip(sorted(neuron_graph), sorted(neuron_graph)+sorted(graph)[-1]+1))
+            neuron_graph = nx.relabel_nodes(neuron_graph, mapping)
+        graph.add_nodes_from(neuron_graph.nodes(data=True))
+        graph.add_edges_from(neuron_graph.edges(data=True))
+    fafb_ffn1_20190805.cache.flush()
+    pickle.dump(graph, open('/braindat/lab/liusl/flywire/fafb-public-skeletons/skeleton_segment_graph.pickle', 'wb'))
+
+
+def compute_ffn_erl():
+    import pickle
+    graph = pickle.load( open('/braindat/lab/liusl/flywire/fafb-public-skeletons/skeleton_segment_graph.pickle', 'rb'))
+    res = {}
+    node_seg_lut = {}
+    n_neurons = len(list(nx.connected_components(graph)))
+    for node, attr in graph.nodes(data=True):
+        node_seg_lut[node] = attr['seg_label'][0]
+
+    res["n_neurons"] = n_neurons
+    res['erl'] = expected_run_length(
+        skeletons=graph, skeleton_id_attribute='skeleton_id',
+        node_segment_lut=node_seg_lut, skeleton_position_attributes=['zyx_coord'],
+        return_merge_split_stats=False, edge_length_attribute='edge_length', merge_thres=1)
+
+    print(f'n_neurons: {res["n_neurons"]}')
+    print(f'Expected run-length: {res["erl"]}')
+
+
+if __name__ == '__main__':
+    # build_neuron_segment_graph()
+    compute_ffn_erl()
