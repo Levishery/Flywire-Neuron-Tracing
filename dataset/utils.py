@@ -16,6 +16,7 @@ import h5py
 from cloudvolume.datasource.precomputed.skeleton.sharded import ShardedPrecomputedSkeletonSource
 from cloudvolume import CloudVolume
 from skimage.transform import resize
+import pickle
 
 z_block = 272
 y_block = 22
@@ -1114,3 +1115,66 @@ def segment_partition():
                 skel_queue.put(split)
 
     print(p_cords, p_vectors)
+
+
+from scipy.stats import gaussian_kde
+
+def get_density_based_bounding_box(points, percentage):
+    # Convert the list of points to a numpy array
+    points_array = np.array(points)
+
+    # Calculate the number of points to be included (30% of the total points)
+    num_points_to_include = int(len(points) * percentage)
+
+    # Calculate the density of the points using kernel density estimation
+    kde = gaussian_kde(points_array.T)
+    density = kde(points_array.T)
+
+    # Sort the points based on density (higher density first)
+    sorted_indices = np.argsort(density)[::-1]
+    points_sorted_by_density = points_array[sorted_indices]
+    # pickle.dump(points_sorted_by_density,  open('/braindat/lab/liusl/flywire/fafb-public-skeletons/point_density.pickle', 'wb'))
+
+    # Get the points corresponding to the top density values (highest density region)
+    points_subset = points_sorted_by_density[:num_points_to_include]
+
+    # Find the minimum and maximum coordinates along each axis for the subset of points
+    min_coords = np.min(points_subset, axis=0)
+    max_coords = np.max(points_subset, axis=0)
+
+    # Compute the dimensions of the bounding box
+    bounding_box_dimensions = max_coords - min_coords
+
+    return bounding_box_dimensions, min_coords, max_coords, points_subset
+
+def get_proofread_blocks():
+    """
+    Input: neurons for evaluation, networkx format
+    Returns: 20 blocks with the most nodes, to be proofread
+
+    """
+    graph = pickle.load(open('/braindat/lab/liusl/flywire/fafb-public-skeletons/skeleton_segment_graph.pickle', 'rb'))
+    points = []
+    block_dict = {}
+    for node, attr in tqdm(graph.nodes(data=True)):
+        # point = attr['zyx_coord']/np.array([4,4,40])
+        point = attr['zyx_coord']
+        points.append(point)
+    random.shuffle(points)
+    box, box_min, box_max, points_subset = get_density_based_bounding_box(points[:100000], 0.1)
+    for point in points_subset:
+        coord = point / np.array([4, 4, 40])
+        x_block, y_block, z_block = fafb_to_block(coord[0], coord[1], coord[2])
+        if str(x_block) + '_' + str(y_block) + '_' + str(z_block) in block_dict.keys():
+            block_dict[str(x_block) + '_' + str(y_block) + '_' + str(z_block)] += 1
+        else:
+            block_dict[str(x_block) + '_' + str(y_block) + '_' + str(z_block)] = 1
+    print(len(block_dict))
+    pickle.dump(block_dict,
+                open('/braindat/lab/liusl/flywire/fafb-public-skeletons/top_30_blocks.pickle', 'wb'))
+    #     x_block, y_block, z_block = fafb_to_block(point[0], point[1], point[2])
+    #     if block_dict[str(x_block)+'_'+str(y_block)+'_'+str(z_block)] is not None:
+    #         block_dict[[x_block, y_block, z_block]] += 1
+    #     else:
+    #         block_dict[[x_block, y_block, z_block]] = 1
+    # sorted(block_dict)

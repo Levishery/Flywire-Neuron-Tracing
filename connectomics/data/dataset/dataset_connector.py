@@ -172,11 +172,12 @@ class ConnectorDataset(torch.utils.data.Dataset):
             return pos_data, out_volume, out_target, out_weight
 
         elif self.mode == 'test':
-            connector = self.connector_list.iloc[index]
             if not self.morphology_dataset:
+                connector = self.connector_list.iloc[index]
                 return self._connector_to_volume_sample(connector, morphology=self.morphology_dataset)
             else:
                 if self.make_test_data:
+                    connector = self.connector_list.iloc[index]
                     _ = self.make_test_samples(connector)
                     pos = {'pos': [0, 0, 0, 0],
                                 'seg_start': 0,

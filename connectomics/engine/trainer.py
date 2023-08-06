@@ -439,12 +439,12 @@ class Trainer(object):
         num_chunk = len(self.dataset.volume_path)
         print("Total number of chunks: ", num_chunk)
         half_patch_size = np.asarray([3, 3, 1])
-        # pc_path_pos = '/braindat/lab/daiyi.zhu/flywire/block_data/v2/point_cloud/train_fps/pos'
-        # pc_path_neg = '/braindat/lab/daiyi.zhu/flywire/block_data/v2/point_cloud/train_fps/neg'
-        # pc_result_root_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_feature/'
-        pc_path_pos = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps/pos'
-        pc_path_neg = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps/neg'
-        pc_result_root_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_feature/'
+        # pc_path_pos = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_fps_2048/pos'
+        # pc_path_neg = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_fps_2048/neg'
+        # pc_result_root_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_fps_2048/'
+        pc_path_pos = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/pos'
+        pc_path_neg = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/neg'
+        pc_result_root_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/'
         out_put_dir = self.cfg.DATASET.OUTPUT_PATH.split('/')[-1]
         pc_result_root_path = os.path.join(pc_result_root_path, out_put_dir)
         patch_size = np.asarray(
@@ -452,7 +452,7 @@ class Trainer(object):
         block_path = self.dataset.volume_path.copy()
         random.seed(time.time())
         random.shuffle(block_path)
-        for chunk in range(num_chunk):
+        for chunk in tqdm(range(num_chunk)):
             csv_path = block_path[chunk]
             block_name = csv_path.split('/')[-1].split('.')[0]
             # block_name = 'connector_18_10_121'
@@ -779,9 +779,21 @@ class Trainer(object):
                 # if self.start_iter % self.cfg.SOLVER.ITERATION_VAL == 0:  # ITERATION_VAL should be k*DATA_CHUNK_ITER
                 #     self.val_loader = build_dataloader(self.cfg, None, mode='val', dataset=self.dataset.dataset)
                 self.chunk_time = time.time()
+                self.dataset.updatechunk()
+                self.dataloader = build_dataloader(self.cfg, self.augmentor, mode,
+                                                   dataset=self.dataset.dataset)
+                self.dataloader = iter(self.dataloader)
+
+                print('chunk loading time:', time.time() - self.chunk_time)
+                print('rank:', rank)
+                print('start train for chunk %d' % chunk)
+                self.train()
+                print('finished train for chunk %d' % chunk)
+                self.start_iter += self.cfg.DATASET.DATA_CHUNK_ITER
+                del self.dataloader
+                print('chunk time:', time.time() - self.chunk_time)
                 # ITERATION_VAL should be k*DATA_CHUNK_ITER, and in main process
                 if self.is_main_process:
-                    self.start_iter=0
                     if self.dataset_val is not None and self.start_iter % self.cfg.SOLVER.ITERATION_VAL == 0:
                         self.dataset_val.volume_done = []
                         self.val_loss_total = 0
@@ -801,19 +813,6 @@ class Trainer(object):
                         if self.val_loss_total < self.best_val_loss_total:
                             self.best_val_loss_total = self.val_loss_total
                             self.save_checkpoint(chunk, is_best=True)
-                self.dataset.updatechunk()
-                self.dataloader = build_dataloader(self.cfg, self.augmentor, mode,
-                                                   dataset=self.dataset.dataset)
-                self.dataloader = iter(self.dataloader)
-
-                print('chunk loading time:', time.time() - self.chunk_time)
-                print('rank:', rank)
-                print('start train for chunk %d' % chunk)
-                self.train()
-                print('finished train for chunk %d' % chunk)
-                self.start_iter += self.cfg.DATASET.DATA_CHUNK_ITER
-                del self.dataloader
-                print('chunk time:', time.time() - self.chunk_time)
         else:
             # inference for EmbedEdgeNetwork
             num_chunk = len(self.dataset.volume_path)

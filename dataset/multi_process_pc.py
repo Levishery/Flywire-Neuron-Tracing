@@ -11,6 +11,7 @@ import h5py
 import csv
 from tqdm import tqdm
 import multiprocessing
+import argparse
 
 
 def read_ply_points(path):
@@ -74,11 +75,11 @@ def farthest_point_sample(xyz, npoint):
     return centroids
 
 
-def write_ply(point, ids, filename):
+def write_ply(point, ids, filename, N):
     file = open(filename, 'w')
     file.writelines("ply\n")
     file.writelines("format ascii 1.0\n")
-    file.writelines("element vertex " + str(1024) + "\n")
+    file.writelines("element vertex " + str(N) + "\n")
     file.writelines("property float x\n")
     file.writelines("property float y\n")
     file.writelines("property float z\n")
@@ -125,15 +126,17 @@ def h5(filepath_output, outpath):
         f.close()
 
 
-def work(dir):
-    N = 1024
-    lx = 60
-    ly = 60
-    lz = 24
+def work(dir, path, target_path):
+    # N = 1024
+    # lx = 60
+    # ly = 60
+    # lz = 24
+    N = 2048
+    lx = 80
+    ly = 80
+    lz = 32
     crop_center = False
-    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test/pos'
-    target_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps/pos'
-    filepath_data = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000_reformat'
+    filepath_data = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat' if 'test' in path else '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000_reformat'
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     filepath_input = os.path.join(path, dir)
     t = time.time() - os.path.getmtime(filepath_input)
@@ -166,29 +169,40 @@ def work(dir):
                             pcd_down = index_points(pcd_tensor, pcd_down_index)
                             pcd_out = pcd_down[0, :, :]
                             ids_down = ids[pcd_down_index.cpu()][0]
-                            write_ply(pcd_out, ids_down, os.path.join(filepath_output, pcd_name))
+                            write_ply(pcd_out, ids_down, os.path.join(filepath_output, pcd_name), N)
                     else:
                         pcd_tensor = torch.tensor(pcd, dtype=torch.long).unsqueeze(dim=0).to(device)
                         pcd_down_index = farthest_point_sample(pcd_tensor, N)
                         pcd_down = index_points(pcd_tensor, pcd_down_index)
                         pcd_out = pcd_down[0, :, :]
                         ids_down = ids[pcd_down_index.cpu()][0]
-                        write_ply(pcd_out, ids_down, os.path.join(filepath_output, pcd_name))
+                        write_ply(pcd_out, ids_down, os.path.join(filepath_output, pcd_name), N)
         else:
             print('%s exists' % filepath_output)
 
+def get_args():
+    parser = argparse.ArgumentParser(description="paths")
+    parser.add_argument('--input_pc_path', type=str, default=None)
+    parser.add_argument('--target_path', type=str, default=None)
+
+    args = parser.parse_args()
+    return args
+
+from functools import partial
 
 if __name__ == '__main__':
-    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test/pos'
+    args = get_args()
+    path = args.input_pc_path
     dirs = os.listdir(path)
     torch.multiprocessing.set_start_method('spawn')
 
     num_worker = 4
     num_worker_real = min(num_worker, os.cpu_count())
     if num_worker_real > 0:
+        partial_work = partial(work, path=args.input_pc_path, target_path=args.target_path)
         with torch.multiprocessing.Pool(num_worker_real) as pool:
             for res in tqdm(
-                    pool.imap_unordered(work, dirs),
+                    pool.imap_unordered(partial_work, dirs),
                     total=len(dirs),
             ):
                 continue
