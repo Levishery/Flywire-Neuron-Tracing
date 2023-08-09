@@ -1,6 +1,7 @@
 # learn dense 3d image embedding with V-net
 SYSTEM:
   NUM_GPUS: 1
+  NUM_CPUS: 0
 MODEL:
 #  EMBED_REDUCTION:
   INPUT_SIZE: [ 17, 129, 129 ]
@@ -35,15 +36,15 @@ SOLVER:
 DATASET:
   CONNECTOR_DATSET: True
   MORPHOLOGY_DATSET: True
-  INPUT_PATH: /braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000_reformat
+  INPUT_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/block_with_index
   IMAGE_NAME:
   LABEL_NAME:
   OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True
 INFERENCE:
-  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
-  GET_PC_FEATURE: Train
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/extract_biological_pc_Unet
+  GET_PC_FEATURE: Tracing
   OUTPUT_ACT: ["none"]
   SAMPLES_PER_BATCH: 64 # per gpu
 AUGMENTOR:

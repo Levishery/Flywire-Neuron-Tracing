@@ -488,9 +488,17 @@ class ConnectorDataset(torch.utils.data.Dataset):
 
     def get_test_sample(self, connector, morphology=True):
         cord = connector[2][1:-1].split()
-        cord = [int(cord[0]), int(cord[1]), int(cord[2]), int(cord[3])]
-        cord = np.asarray(cord) + np.asarray([0, 8-self.sample_volume_size[0] / 2, 64-self.sample_volume_size[1]/2, 64-self.sample_volume_size[1]/2])
-        cord = [int(cord[0]), np.clip(int(cord[1]), 0, self.volume[0].shape[0]-self.sample_volume_size[0]), int(cord[2]), int(cord[3])]
+        cord = [item for item in cord if item != ""]
+        if len(cord) == 4:
+            cord = [int(cord[0]), int(cord[1]), int(cord[2]), int(cord[3])]
+            cord = np.asarray(cord) + np.asarray([0, 8-self.sample_volume_size[0] / 2, 64-self.sample_volume_size[1]/2, 64-self.sample_volume_size[1]/2])
+            cord = [int(cord[0]), np.clip(int(cord[1]), 0, self.volume[0].shape[0]-self.sample_volume_size[0]), int(cord[2]), int(cord[3])]
+        else:
+            cord = self.fafb_to_block(float(cord[0]), float(cord[1]), float(cord[2]))
+            cord = [cord[2], cord[0], cord[1]]
+            cord = np.asarray(cord) + np.asarray([-self.sample_volume_size[0] / 2, -self.sample_volume_size[1]/2, -self.sample_volume_size[1]/2])
+            cord = [0, np.clip(int(cord[0]), 0, self.volume[0].shape[0]-self.sample_volume_size[0]), int(cord[1]), int(cord[2])]
+
         seg_start = connector[0]
         seg_candidate = connector[1]
         pos, out_volume = self._crop_with_pos(cord, self.sample_volume_size)

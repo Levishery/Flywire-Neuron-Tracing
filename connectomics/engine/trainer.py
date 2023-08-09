@@ -432,6 +432,95 @@ class Trainer(object):
             self.test()
 
 
+    def get_pc_feature_test(self, mode: str, rank=None):
+        r"""get point cloud point image features.
+        """
+        self.dataset = get_dataset(self.cfg, self.augmentor, mode, rank=rank)
+        num_chunk = len(self.dataset.volume_path)
+        print("Total number of chunks: ", num_chunk)
+        half_patch_size = np.asarray([3, 3, 1])
+        # pc_path_pos = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_fps_2048/pos'
+        # pc_path_neg = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_fps_2048/neg'
+        # pc_result_root_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/train_fps_2048/'
+        pc_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/biological/'
+        pc_result_root_path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/biological_feature'
+        out_put_dir = self.cfg.DATASET.OUTPUT_PATH.split('/')[-1]
+        pc_result_root_path = os.path.join(pc_result_root_path, out_put_dir)
+        patch_size = np.asarray(
+            [self.cfg.MODEL.INPUT_SIZE[1], self.cfg.MODEL.INPUT_SIZE[2], self.cfg.MODEL.INPUT_SIZE[0]])
+        block_path = self.dataset.volume_path.copy()
+        random.seed(time.time())
+        random.shuffle(block_path)
+        for chunk in tqdm(range(num_chunk)):
+            csv_path = block_path[chunk]
+            block_name = csv_path.split('/')[-1].split('.')[0]
+            pc_result_path = os.path.join(pc_result_root_path, block_name)
+            if not os.path.exists(pc_result_path):
+                os.makedirs(pc_result_path)
+                csv_list = pd.read_csv(csv_path, header=None)
+                try:
+                    self.dataset.updatechunk_given_path(csv_path)
+                    self.dataloader = build_dataloader(self.cfg, None, mode, dataset=self.dataset.dataset)
+                    self.dataloader = iter(self.dataloader)
+                except:
+                    print('image not download')
+                    continue
+                block_start_cord = self.dataset.start_cord
+                start = time.perf_counter()
+                with torch.no_grad():
+                    for i, sample in enumerate(self.dataloader):
+                        print('progress: %d/%d batches, total time %.2fs' %
+                              (i + 1, len(self.dataloader), time.perf_counter() - start))
+                        volume = sample.out_input
+                        seg_ids = sample.candidates
+                        volume, _ = self.get_morph_input(volume, sample.pos)
+                        label = sample.seg_start
+                        for idx in range(len(seg_ids)):
+                            name = str(seg_ids[idx][0]) + '_' + str(seg_ids[idx][1]) + '.ply'
+                            pc_ply_path = os.path.join(pc_path, 'evaluate_fafb_dust1200_dis500_rad0.3216_' +str(label[idx]))
+                            if os.path.exists(os.path.join(pc_ply_path, name)):
+                                try:
+                                    pc = PlyData.read(os.path.join(pc_ply_path, name))
+                                except:
+                                    continue
+                                patch_cord = np.asarray(block_start_cord) + np.asarray(
+                                    [sample.pos[idx][2] * 4, sample.pos[idx][3] * 4, sample.pos[idx][1]])
+                                bbox = [list(patch_cord), list(patch_cord + patch_size * [4, 4, 1])]
+                                x = pc.elements[0].data['x']
+                                y = pc.elements[0].data['y']
+                                z = pc.elements[0].data['z']
+                                ids = pc.elements[0].data['id']
+                                cords = np.transpose(np.asarray([x, y, z]) / np.expand_dims(np.asarray([4, 4, 40]), axis=1),
+                                                     [1, 0])
+                                embeddings = np.zeros([len(x), 16])
+                                in_box_indexes = np.where(select_points(bbox, cords))[0]
+                                for in_box_index in in_box_indexes:
+                                    cord_in_patch = np.round((cords[in_box_index] - patch_cord) / [4, 4, 1]).astype(
+                                        np.int32)
+                                    [x_bound, y_bound, z_bound] = get_crop_index(cord_in_patch, half_patch_size, patch_size)
+                                    # mask the local embedding with interested segmentation mask
+                                    local_mask = volume[idx, ids[in_box_index], z_bound[0]:z_bound[1],
+                                                 x_bound[0]:x_bound[1], y_bound[0]:y_bound[1]] == 1
+                                    if not local_mask.any():
+                                        continue
+                                    if self.cfg.MODEL.OUT_PLANES != 1:
+                                        local_embed = volume[idx, 3:, z_bound[0]:z_bound[1], x_bound[0]:x_bound[1],
+                                                      y_bound[0]:y_bound[1]]
+                                        mean_embed = torch.mean(local_embed[:, local_mask], dim=1)
+                                        embeddings[in_box_index, :] = mean_embed.detach().cpu().numpy()
+                                    else:
+                                        # get intensity only
+                                        local_embed = volume[idx, 3, z_bound[0]:z_bound[1], x_bound[0]:x_bound[1],
+                                                      y_bound[0]:y_bound[1]].unsqueeze(dim=0)
+                                        mean_embed = torch.mean(local_embed[:, local_mask], dim=1)
+                                        embeddings[in_box_index, 0] = mean_embed.detach().cpu().numpy()
+                                writeh5(os.path.join(pc_result_path, name.replace('.ply', '.h5')), embeddings)
+                            else:
+                                print('warning: %s'%os.path.join(pc_ply_path, name))
+
+        return
+
+
     def get_pc_feature(self, mode: str, rank=None):
         r"""get point cloud point image features.
         """

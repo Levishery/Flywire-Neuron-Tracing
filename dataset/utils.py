@@ -1178,3 +1178,27 @@ def get_proofread_blocks():
     #     else:
     #         block_dict[[x_block, y_block, z_block]] = 1
     # sorted(block_dict)
+
+def get_evaluate_blocks():
+    filepath_data = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/'
+    block_csv_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/block'
+    indexes = range(0,16)
+    for index in indexes:
+        file_name = 'evaluate_fafb_dust1200_dis500_rad0.3216_' + str(index) + '.csv'
+        df = pd.read_csv(os.path.join(filepath_data, file_name), header=None)
+        N = len(df)
+        for ii in tqdm(range(0, N)):
+            segid1 = df.iloc[ii, 0]
+            segid2 = df.iloc[ii, 1]
+            cord = df.iloc[ii, 2][1:-1].split(' ')
+            cord = [item for item in cord if item != ""]
+            x,y,z= [float(cord[0]), float(cord[1]), float(cord[2])]
+            x_block, y_block, z_block = fafb_to_block(x, y, z)
+            block_name = 'connector_' + str(x_block) + '_' + str(y_block) + '_' + str(z_block)
+            row = pd.DataFrame(
+                [{'node0_segid': int(segid1), 'node1_segid': int(segid2), 'cord': cord, 'target': -1,
+                  'prediction': -1, 'box_index': index}])
+            row.to_csv(os.path.join(block_csv_path, block_name+ '.csv'), mode='a', header=False, index=False)
+
+
+

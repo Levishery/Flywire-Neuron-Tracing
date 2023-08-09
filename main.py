@@ -114,8 +114,11 @@ def main():
             test_func = trainer.test
         test_func() if args.inference else trainer.train()
     elif cfg.DATASET.DO_MULTI_VOLUME:
-        if cfg.INFERENCE.GET_PC_FEATURE:
-            trainer.get_pc_feature(mode, rank=args.local_rank)
+        if cfg.INFERENCE.GET_PC_FEATURE != 'None':
+            if cfg.INFERENCE.GET_PC_FEATURE == 'Tracing':
+                trainer.get_pc_feature_test(mode, rank=args.local_rank)
+            elif cfg.INFERENCE.GET_PC_FEATURE == 'Train':
+                trainer.get_pc_feature(mode, rank=args.local_rank)
         elif cfg.INFERENCE.GET_PATCH_FEATURE:
             trainer.test_patch(mode, rank=args.local_rank)
         else:
