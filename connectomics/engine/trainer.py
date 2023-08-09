@@ -499,14 +499,20 @@ class Trainer(object):
                                         np.int32)
                                     [x_bound, y_bound, z_bound] = get_crop_index(cord_in_patch, half_patch_size, patch_size)
                                     # mask the local embedding with interested segmentation mask
-                                    local_embed = volume[idx, 3:, z_bound[0]:z_bound[1], x_bound[0]:x_bound[1],
-                                                  y_bound[0]:y_bound[1]]
                                     local_mask = volume[idx, ids[in_box_index], z_bound[0]:z_bound[1],
                                                  x_bound[0]:x_bound[1], y_bound[0]:y_bound[1]] == 1
                                     if not local_mask.any():
                                         continue
-                                    mean_embed = torch.mean(local_embed[:, local_mask], dim=1)
-                                    embeddings[in_box_index, :] = mean_embed.detach().cpu().numpy()
+                                    if self.cfg.MODEL.OUT_PLANES != 1:
+                                        local_embed = volume[idx, 3:, z_bound[0]:z_bound[1], x_bound[0]:x_bound[1],
+                                                      y_bound[0]:y_bound[1]]
+                                        mean_embed = torch.mean(local_embed[:, local_mask], dim=1)
+                                        embeddings[in_box_index, :] = mean_embed.detach().cpu().numpy()
+                                    else:
+                                        local_embed = volume[idx, 3, z_bound[0]:z_bound[1], x_bound[0]:x_bound[1],
+                                                      y_bound[0]:y_bound[1]].unsqueeze(dim=0)
+                                        mean_embed = torch.mean(local_embed[:, local_mask], dim=1)
+                                        embeddings[in_box_index, 0] = mean_embed.detach().cpu().numpy()
                                 writeh5(os.path.join(pc_result_path, name.replace('.ply', '.h5')), embeddings)
 
         return
@@ -886,9 +892,11 @@ class Trainer(object):
     def get_morph_input(self, volume, pos=None):
         volume_image = volume[:, 0, :, :, :]
         volume_morph = volume[:, 1:, :, :, :]
+        input_size = self.cfg.MODEL.INPUT_SIZE
         if pos is not None:
             pos_record = pos[0]
         if self.cfg.MODEL.IN_PLANES > 4:
+            image_input_size = self.cfg_image_model.MODEL.INPUT_SIZE
             if self.cfg.MODEL.MASK_EMBED:
                 morph_dim = 2
             else:
@@ -906,10 +914,20 @@ class Trainer(object):
                             volume_embedding_list.append(volume_embedding)
                             continue
                         pos_record = pos[i]
-                    input_image = volume_image[i * image_batch_size:(i + 1) * image_batch_size].to(self.device,
-                                                                                                   non_blocking=True)
-                    input_image = input_image.unsqueeze(dim=1)
+                    input_image = volume_image[i * image_batch_size:(i + 1) * image_batch_size].unsqueeze(dim=0)
+                    if not image_input_size == input_size:
+                        resize = torch.nn.Upsample(size=image_input_size)
+                        input_image = input_image[:, :, (input_size[0]-image_input_size[0])//2: (input_size[0]+image_input_size[0])//2, :, :]
+                        input_image = resize(input_image)
+
+                    input_image = input_image.to(self.device, non_blocking=True)
+
                     volume_embedding = self.image_model(input_image)
+                    if not image_input_size == input_size:
+                        resize = torch.nn.Upsample(size=[image_input_size[0], input_size[1], input_size[2]])
+                        volume_embedding_resize = torch.zeros(size=[embed_dim]+input_size, device=self.device).unsqueeze(dim=0)
+                        volume_embedding_resize[:, :, (input_size[0]-image_input_size[0])//2: (input_size[0]+image_input_size[0])//2, :, :] = resize(volume_embedding)
+                        volume_embedding = volume_embedding_resize
 
                     if self.cfg.MODEL.DROP_MOD:
                         if random.random() < 0.1:
@@ -935,7 +953,7 @@ class Trainer(object):
                 else:
                     volume_input = torch.cat((volume_morph.to(self.device, non_blocking=True), volume_embedding), dim=1)
         elif self.cfg.MODEL.IN_PLANES == 4:
-            volume_input = volume
+            volume_input = torch.cat((volume_morph, volume_image.unsqueeze(dim=1)), dim=1)
         else:
             volume_input = volume_morph
         if self.cfg.MODEL.MORPH_INPUT_SIZE is not None:
