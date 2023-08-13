@@ -708,17 +708,30 @@ def build_neuron_segment_graph():
 def compute_ffn_erl():
     import pickle
     graph = pickle.load( open('/braindat/lab/liusl/flywire/fafb-public-skeletons/skeleton_segment_graph.pickle', 'rb'))
+    mapping = {}
+    graph_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/result_0.980.pickle'
+    proofread_subgraphs = pickle.load(open(graph_path, 'rb'))
+    print(graph_path)
+    for subgraph in proofread_subgraphs:
+        subgraph = list(subgraph)
+        mapped_id = subgraph[0]
+        for id in subgraph:
+            mapping[id] = mapped_id
+
     res = {}
     node_seg_lut = {}
     n_neurons = len(list(nx.connected_components(graph)))
     for node, attr in graph.nodes(data=True):
-        node_seg_lut[node] = attr['seg_label'][0]
+        if attr['seg_label'][0] in mapping.keys():
+            node_seg_lut[node] = mapping[attr['seg_label'][0]]
+        else:
+            node_seg_lut[node] = attr['seg_label'][0]
 
     res["n_neurons"] = n_neurons
     res['erl'] = expected_run_length(
         skeletons=graph, skeleton_id_attribute='skeleton_id',
         node_segment_lut=node_seg_lut, skeleton_position_attributes=['zyx_coord'],
-        return_merge_split_stats=False, edge_length_attribute='edge_length', merge_thres=1)
+        return_merge_split_stats=False, edge_length_attribute='edge_length', merge_thres=3)
 
     print(f'n_neurons: {res["n_neurons"]}')
     print(f'Expected run-length: {res["erl"]}')

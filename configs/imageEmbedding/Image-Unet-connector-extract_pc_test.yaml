@@ -46,7 +46,7 @@ INFERENCE:
   OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/extract_biological_pc_Unet
   GET_PC_FEATURE: Tracing
   OUTPUT_ACT: ["none"]
-  SAMPLES_PER_BATCH: 64 # per gpu
+  SAMPLES_PER_BATCH: 4 # per gpu
 AUGMENTOR:
   SMOOTH: False
   MISSINGPARTS:

@@ -8,6 +8,7 @@ import tifffile as tf
 import random
 import imageio
 import glob
+import networkx as nx
 from queue import Queue,LifoQueue,PriorityQueue
 import matplotlib.ticker as ticker
 from matplotlib import pyplot as plt
@@ -584,117 +585,115 @@ def set_new_threshold():
 
 
 def plot_thresh():
-    # path = '/braindat/lab/liusl/flywire/experiment/test-3k/finetune_final_best/thresh.csv'
-    # csv_list = pd.read_csv(path, header=None)
-    # rec1 = csv_list[1]
-    # acc1 = csv_list[2]
-    # path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/thresh.csv'
-    # csv_list = pd.read_csv(path, header=None)
-    # rec2 = csv_list[1]
-    # acc2 = csv_list[2]
-    # path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/thresh.csv'
-    # csv_list = pd.read_csv(path, header=None)
-    # rec0 = csv_list[1]
-    # acc0 = csv_list[2]
-    # path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/thresh.csv'
-    # csv_list = pd.read_csv(path, header=None)
-    # rec3 = csv_list[1]
-    # acc3 = csv_list[2]
-    # fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=2, figsize=(6, 3))
-    # plt.gcf().subplots_adjust(bottom=0.13)
-    # ax1.plot(rec1, acc1, label='ours')
-    # ax1.plot(rec3, acc3, label='Embed.[14]')
-    # ax1.plot(rec2, acc2, label='Baseline')
-    # ax1.plot(rec0, acc0, label='EdgeNetwork')
-    # ax1.plot(rec1[9], acc1[9], 'b^')
-    # ax1.plot(rec3[9], acc3[9], '^', color="orange")
-    # ax1.plot(rec2[9], acc2[9], 'g^')
-    # ax1.plot(rec0[9], acc0[9], 'r^')
-    # ax1.legend()
-    # ax1.set_title('3,000 Test Blocks')
-    # ax1.set_xlabel('recall', labelpad=0.4)
-    # ax1.set_ylabel('precision')
-    # ax1.set_ylim(0.90, 1.01)
-    # ax1.set_xlim(0.80, 1.01)
-    # ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.02))
-    # ax1.yaxis.set_minor_locator(ticker.MultipleLocator(0.005))
-    # ax1.xaxis.set_major_locator(ticker.MultipleLocator(0.05))
-    # ax1.xaxis.set_minor_locator(ticker.MultipleLocator(0.01))
-
-    # fig, [ax1, ax2, ax3, ax4] = plt.subplots(nrows=1, ncols=4, figsize=(14, 3.3))
-    fig, [[ax1, ax2], [ax3, ax4]] = plt.subplots(nrows=2, ncols=2, figsize=(12, 5.2))
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/0dist_thresh.csv'
-    csv_list = pd.read_csv(path, header=None)
-    rec1 = csv_list[1]
-    acc1 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/0dist_thresh.csv'
-    csv_list = pd.read_csv(path, header=None)
-    rec2 = csv_list[1]
-    acc2 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/0dist_thresh.csv'
+    fig, [[ax1, ax2], [ax3, ax4]] = plt.subplots(nrows=2, ncols=2, figsize=(6, 5.7))
+    path = '/braindat/lab/liusl/flywire/experiment/test-flytracing/Baseline_debugged/0dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec0 = csv_list[1]
     acc0 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/0dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-intensity/predictions0dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec1 = csv_list[1]
+    acc1 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-SegEmbed/predictions0dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec2 = csv_list[1]
+    acc2 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-Embed-2/predictions0dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec3 = csv_list[1]
     acc3 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only_43k/0dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_pc0dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec4 = csv_list[1]
     acc4 = csv_list[2]
-    ax1.set_title('Misalignment', fontsize=14)
-    ax1.plot(rec0, acc0, 'r-', label='EdgeNetwork[15]')
-    ax1.plot(rec2, acc2, 'g-', label='Baseline')
-    ax1.plot(rec3, acc3, label='BS+Seg-Embed[11]', color='orange')
-    ax1.plot(rec4, acc4, label='BS+Intensity', color='purple')
-    ax1.plot(rec1, acc1, 'b-', label='BS+Connect-Embed')
-    ax1.plot(rec1[9], acc1[9], 'b^')
-    ax1.plot(rec3[9], acc3[9], '^', color="orange")
-    ax1.plot(rec2[9], acc2[9], 'g^')
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Intensitytest_20480dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec5 = csv_list[1]
+    acc5 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Metrictest0dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec6 = csv_list[1]
+    acc6 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Unettest0dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec7 = csv_list[1]
+    acc7 = csv_list[2]
+    ax1.set_title('Misalignment', fontsize=12)
+    line1, = ax1.plot(rec0, acc0, 'r-', label='EdgeNetwork')
+    line2, = ax1.plot(rec1, acc1, 'b-', label='Edge+Intensity')
+    line3, = ax1.plot(rec2, acc2, 'g-', label='Edge+Seg-Embed')
+    line4, = ax1.plot(rec3, acc3, label='Edge+Connect-Embed', color='skyblue')
+    line5, = ax1.plot(rec4, acc4, label='PointNet++', color='purple')
+    line6, = ax1.plot(rec5, acc5, label='Point+Intensity', color='gray')
+    line7, = ax1.plot(rec6, acc6, label='Point+Seg-Embed', color='pink')
+    line8, = ax1.plot(rec7, acc7, label='Point+Connect-Embed', color='orange')
     ax1.plot(rec0[9], acc0[9], 'r^')
+    ax1.plot(rec1[9], acc1[9], 'b^')
+    ax1.plot(rec2[9], acc2[9], 'g^')
+    ax1.plot(rec3[9], acc3[9], '^', color="skyblue")
     ax1.plot(rec4[9], acc4[9], '^', color="purple")
+    ax1.plot(rec5[9], acc5[9], '^', color="gray")
+    ax1.plot(rec6[9], acc6[9], '^', color="pink")
+    ax1.plot(rec7[9], acc7[9], '^', color="orange")
     # ax1.legend(fontsize=11)
     ax1.set_ylim(0.84, 1.0)
     ax1.set_xlim(0.60, 1.0)
     # ax1.set_xlabel('recall', labelpad=0.4, fontsize=13)
-    ax1.set_ylabel('precision', fontsize=13)
+    ax1.set_ylabel('precision', fontsize=12)
     ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.04))
     ax1.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
     ax1.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
     ax1.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
 
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/1dist_thresh.csv'
-    csv_list = pd.read_csv(path, header=None)
-    rec1 = csv_list[1]
-    acc1 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/1dist_thresh.csv'
-    csv_list = pd.read_csv(path, header=None)
-    rec2 = csv_list[1]
-    acc2 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/1dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-flytracing/Baseline_debugged/1dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec0 = csv_list[1]
     acc0 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/1dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-intensity/predictions1dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec1 = csv_list[1]
+    acc1 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-SegEmbed/predictions1dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec2 = csv_list[1]
+    acc2 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-Embed-2/predictions1dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec3 = csv_list[1]
     acc3 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only_43k/1dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_pc1dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec4 = csv_list[1]
     acc4 = csv_list[2]
-    ax2.set_title('Missing-Section', fontsize=14)
-    ax2.plot(rec0, acc0, 'r-', label='EdgeNetwork[16]')
-    ax2.plot(rec2, acc2, 'g-', label='Baseline')
-    ax2.plot(rec4, acc4, label='Image', color='purple')
-    ax2.plot(rec3, acc3, label='Embed.[11]', color='orange')
-    ax2.plot(rec1, acc1, 'b-', label='Proposed')
-    ax2.plot(rec1[9], acc1[9], 'b^')
-    ax2.plot(rec3[9], acc3[9], '^', color="orange")
-    ax2.plot(rec2[9], acc2[9], 'g^')
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Intensitytest_20481dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec5 = csv_list[1]
+    acc5 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Metrictest1dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec6 = csv_list[1]
+    acc6 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Unettest1dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec7 = csv_list[1]
+    acc7 = csv_list[2]
+    ax2.set_title('Missing-Section', fontsize=12)
+    ax2.plot(rec0, acc0, 'r-', label='EdgeNetwork')
+    ax2.plot(rec1, acc1, 'b-', label='Edge+Intensity')
+    ax2.plot(rec2, acc2, 'g-', label='Edge+Seg-Embed')
+    ax2.plot(rec3, acc3, label='Edge+Connect-Embed', color='skyblue')
+    ax2.plot(rec4, acc4, label='PointNet++', color='purple')
+    ax2.plot(rec5, acc5, label='Point+Intensity', color='gray')
+    ax2.plot(rec6, acc6, label='Point+Seg-Embed', color='pink')
+    ax2.plot(rec7, acc7, label='Point+Connect-Embed', color='orange')
     ax2.plot(rec0[9], acc0[9], 'r^')
+    ax2.plot(rec1[9], acc1[9], 'b^')
+    ax2.plot(rec2[9], acc2[9], 'g^')
+    ax2.plot(rec3[9], acc3[9], '^', color="skyblue")
     ax2.plot(rec4[9], acc4[9], '^', color="purple")
+    ax2.plot(rec5[9], acc5[9], '^', color="gray")
+    ax2.plot(rec6[9], acc6[9], '^', color="pink")
+    ax2.plot(rec7[9], acc7[9], '^', color="orange")
     # ax2.legend()
     ax2.set_ylim(0.84, 1.0)
     ax2.set_xlim(0.60, 1.0)
@@ -705,83 +704,125 @@ def plot_thresh():
     ax2.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
     ax2.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
 
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/0.5dist_thresh.csv'
-    csv_list = pd.read_csv(path, header=None)
-    rec1 = csv_list[1]
-    acc1 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/0.5dist_thresh.csv'
-    csv_list = pd.read_csv(path, header=None)
-    rec2 = csv_list[1]
-    acc2 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/0.5dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-flytracing/Baseline_debugged/0.5dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec0 = csv_list[1]
     acc0 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/0.5dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-intensity/predictions0.5dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec1 = csv_list[1]
+    acc1 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-SegEmbed/predictions0.5dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec2 = csv_list[1]
+    acc2 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-Embed-2/predictions0.5dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec3 = csv_list[1]
     acc3 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only_43k/0.5dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_pc0.5dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec4 = csv_list[1]
     acc4 = csv_list[2]
-    ax3.set_title('Mixed', fontsize=14)
-    ax3.plot(rec0, acc0, 'r-', label='EdgeNetwork[16]')
-    ax3.plot(rec2, acc2, 'g-', label='Baseline')
-    ax3.plot(rec4, acc4, label='Image', color='purple')
-    ax3.plot(rec3, acc3, label='Embed.[11]', color='orange')
-    ax3.plot(rec1, acc1, 'b-', label='Proposed')
-    ax3.plot(rec1[9], acc1[9], 'b^')
-    ax3.plot(rec3[9], acc3[9], '^', color="orange")
-    ax3.plot(rec2[9], acc2[9], 'g^')
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Intensitytest_20480.5dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec5 = csv_list[1]
+    acc5 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Metrictest0.5dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec6 = csv_list[1]
+    acc6 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Unettest0.5dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec7 = csv_list[1]
+    acc7 = csv_list[2]
+    ax3.set_title('Mixed', fontsize=12)
+    ax3.plot(rec0, acc0, 'r-', label='EdgeNetwork')
+    ax3.plot(rec1, acc1, 'b-', label='Edge+Intensity')
+    ax3.plot(rec2, acc2, 'g-', label='Edge+Seg-Embed')
+    ax3.plot(rec3, acc3, label='Edge+Connect-Embed', color='skyblue')
+    ax3.plot(rec4, acc4, label='PointNet++', color='purple')
+    ax3.plot(rec5, acc5, label='Point+Intensity', color='gray')
+    ax3.plot(rec6, acc6, label='Point+Seg-Embed', color='pink')
+    ax3.plot(rec7, acc7, label='Point+Connect-Embed', color='orange')
     ax3.plot(rec0[9], acc0[9], 'r^')
+    ax3.plot(rec1[9], acc1[9], 'b^')
+    ax3.plot(rec2[9], acc2[9], 'g^')
+    ax3.plot(rec3[9], acc3[9], '^', color="skyblue")
     ax3.plot(rec4[9], acc4[9], '^', color="purple")
+    ax3.plot(rec5[9], acc5[9], '^', color="gray")
+    ax3.plot(rec6[9], acc6[9], '^', color="pink")
+    ax3.plot(rec7[9], acc7[9], '^', color="orange")
     # ax2.legend()
+    ax3.legend(handles=[line1, line2, line3, line4],
+               labels=['EdgeNetwork', 'Edge+Intensity', 'Edge+Seg-Embed', 'Edge+Connect-Embed'], bbox_to_anchor=(0.56, -0.94), loc="lower center")
     ax3.set_ylim(0.84, 1.0)
     ax3.set_xlim(0.60, 1.0)
-    ax3.set_xlabel('recall', labelpad=0.4, fontsize=13)
+    ax3.set_xlabel('recall', labelpad=0.4, fontsize=12)
     ax3.set_ylabel('precision', fontsize=12)
     ax3.yaxis.set_major_locator(ticker.MultipleLocator(0.04))
     ax3.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
     ax3.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
     ax3.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
 
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Unetft2/2dist_thresh.csv'
-    csv_list = pd.read_csv(path, header=None)
-    rec1 = csv_list[1]
-    acc1 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/dist_thresh.csv'
-    csv_list = pd.read_csv(path, header=None)
-    rec2 = csv_list[1]
-    acc2 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-flytracing/Baseline_debugged/dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec0 = csv_list[1]
     acc0 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/metric/dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-intensity/predictions2dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec1 = csv_list[1]
+    acc1 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-SegEmbed/predictions2dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec2 = csv_list[1]
+    acc2 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-Embed-2/predictions2dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec3 = csv_list[1]
     acc3 = csv_list[2]
-    path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_only_43k/2dist_thresh.csv'
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_pc2dist_thresh.csv'
     csv_list = pd.read_csv(path, header=None)
     rec4 = csv_list[1]
     acc4 = csv_list[2]
-    ax4.set_title('Average', fontsize=14)
-    ax4.plot(rec0, acc0, 'r-', label='EdgeNetwork[15]')
-    ax4.plot(rec2, acc2, 'g-', label='Baseline')
-    ax4.plot(rec3, acc3, label='BS+Seg-Embed[11]', color='orange')
-    ax4.plot(rec4, acc4, label='BS+Intensity', color='purple')
-    ax4.plot(rec1, acc1, 'b-', label='BS+Connect-Embed')
-    ax4.plot(rec1[9], acc1[9], 'b^')
-    ax4.plot(rec3[9], acc3[9], '^', color="orange")
-    ax4.plot(rec2[9], acc2[9], 'g^')
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Intensitytest_20482dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec5 = csv_list[1]
+    acc5 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Metrictest2dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec6 = csv_list[1]
+    acc6 = csv_list[2]
+    path = '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Unettest2dist_thresh.csv'
+    csv_list = pd.read_csv(path, header=None)
+    rec7 = csv_list[1]
+    acc7 = csv_list[2]
+    ax4.set_title('Average', fontsize=12)
+    ax4.plot(rec0, acc0, 'r-', label='EdgeNetwork')
+    ax4.plot(rec1, acc1, 'b-', label='Edge+Intensity')
+    ax4.plot(rec2, acc2, 'g-', label='Edge+Seg-Embed')
+    ax4.plot(rec3, acc3, label='Edge+Connect-Embed', color='skyblue')
+    ax4.plot(rec4, acc4, label='PointNet++', color='purple')
+    ax4.plot(rec5, acc5, label='Point+Intensity', color='gray')
+    ax4.plot(rec6, acc6, label='Point+Seg-Embed', color='pink')
+    ax4.plot(rec7, acc7, label='Point+Connect-Embed', color='orange')
     ax4.plot(rec0[9], acc0[9], 'r^')
+    ax4.plot(rec1[9], acc1[9], 'b^')
+    ax4.plot(rec2[9], acc2[9], 'g^')
+    ax4.plot(rec3[9], acc3[9], '^', color="skyblue")
     ax4.plot(rec4[9], acc4[9], '^', color="purple")
+    ax4.plot(rec5[9], acc5[9], '^', color="gray")
+    ax4.plot(rec6[9], acc6[9], '^', color="pink")
+    ax4.plot(rec7[9], acc7[9], '^', color="orange")
+    ax4.legend(handles=[line5, line6, line7, line8],
+               labels=['PointNet++', 'Point+Intensity', 'Point+Seg-Embed', 'Point+Connect-Embed'], bbox_to_anchor=(0.56, -0.94), loc="lower center")
     # ax2.legend()
-    ax4.legend(fontsize=11, bbox_to_anchor=(1.04, 0), loc="lower left")
+    # ax4.legend(fontsize=11, bbox_to_anchor=(1.04, 0), loc="lower left")
+    # ax4.legend(bbox_to_anchor=(0.57, -1.5), loc="lower center")
+    # ax4.legend(loc="best")
     ax4.set_ylim(0.84, 1.0)
     ax4.set_xlim(0.60, 1.0)
-    ax4.set_xlabel('recall', labelpad=0.4, fontsize=13)
+    ax4.set_xlabel('recall', labelpad=0.4, fontsize=12)
     # ax4.set_ylabel('precision', fontsize=12)
     ax4.yaxis.set_major_locator(ticker.MultipleLocator(0.04))
     ax4.yaxis.set_minor_locator(ticker.MultipleLocator(0.01))
@@ -789,22 +830,26 @@ def plot_thresh():
     ax4.xaxis.set_minor_locator(ticker.MultipleLocator(0.02))
     plt.tight_layout()
     # plt.subplots_adjust(wspace=0.18)
-    plt.subplots_adjust(wspace=0.18, hspace=0.27)
+    plt.subplots_adjust(wspace=0.22, hspace=0.3)
 
-    plt.savefig('thresh.pdf')
+    plt.savefig('/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/thresh.pdf')
 
 
 def plot_thresh_distort():
     path = '/braindat/lab/liusl/flywire/experiment/test-3k/image_distortion.xlsx'
-    # pred_path = ['/braindat/lab/liusl/flywire/experiment/test-3k/finetune1_43k/predictions',
-    #              '/braindat/lab/liusl/flywire/experiment/test-3k/metric/predictions',
-    #              '/braindat/lab/liusl/flywire/experiment/test-3k/baseline-55200/predictions',
-    #              '/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/predictions']
-    pred_path = ['/braindat/lab/liusl/flywire/experiment/test-3k/Baseline_debugged/predictions']
+    pred_path = ['/braindat/lab/liusl/flywire/experiment/test-3k/Edge-Embed-2/predictions',
+                 '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-intensity/predictions',
+                 '/braindat/lab/liusl/flywire/experiment/test-3k/Edge-SegEmbed/predictions',
+                 '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Metrictest',
+                 '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Unettest',
+                 '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_pc',
+                 '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Intensitytest_2048']
+    # pred_path = ['/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Intensitytest_2048']
     list = pd.read_excel(path, header=None)
     target_type = [2, 1, 0, 0.5]
-    # threshes = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
-    threshes = [0.5]
+    # target_type = [1]
+    threshes = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+    # threshes = [0.5]
     for method in pred_path:
         for thresh in threshes:
             recall_list = []
@@ -825,7 +870,7 @@ def plot_thresh_distort():
                             accuracy_list.append(accuracy)
             row = pd.DataFrame(
                 [{'thresh': thresh, 'recall': np.mean(recall_list), 'accuracy': np.mean(accuracy_list)}])
-            row.to_csv(method.replace('predictions', str(target_type[0]) + 'dist_thresh.csv'), mode='a', header=False,
+            row.to_csv(method + str(target_type[0]) + 'dist_thresh.csv', mode='a', header=False,
                        index=False)
 
 
@@ -1200,5 +1245,42 @@ def get_evaluate_blocks():
                   'prediction': -1, 'box_index': index}])
             row.to_csv(os.path.join(block_csv_path, block_name+ '.csv'), mode='a', header=False, index=False)
 
+def get_zebrafinch():
+    ZSTART, ZEND = 255, 383
+    YSTART, YEND = 1407, 1663
+    XSTART, XEND = 1535, 1791
+    vol = CloudVolume(
+        'https://storage.googleapis.com/j0126-nature-methods-data/GgwKmcKgrcoNxJccKuGIzRnQqfit9hnfK1ctZzNbnuU/ffn_segmentation',
+        mip=0, bounded=True, progress=False)
+    image_xyzc = vol[XSTART:XEND, YSTART:YEND, ZSTART:ZEND]
+    image_zyx = np.transpose(image_xyzc[..., 0], [2, 1, 0])
+    name = 'image_' + 'z' + str(ZSTART) + '-' + str(ZEND) + '_'+ 'y' + str(YSTART) + '-' + str(YEND) + 'x' + str(XSTART) + '-' + str(XEND) + '.h5'
+    writeh5('/braindat/zebrafinch/GT/'+name, image_zyx)
 
 
+def get_connection_graph():
+    result_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/block_result'
+    thresh = 0.95
+    train_path = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000'
+    # 创建一个无向图
+    G = nx.Graph()
+    csv_names = os.listdir(result_path)
+    train_name = os.listdir(train_path)
+    for csv_name in tqdm(csv_names):
+        if csv_name not in train_name:
+            try:
+                df = pd.read_csv(os.path.join(result_path, csv_name), header=None)
+                threshed_df = df[df.iloc[:, 4] > thresh]
+                for ii, row in threshed_df.iterrows():
+                    # 添加边到图中
+                    try:
+                        G.add_edge(int(row[0]), int(row[1]))
+                    except:
+                        print('debug')
+            except:
+                print(csv_name)
+                os.remove(os.path.join(result_path, csv_name))
+        else:
+            print('%s is in train'%csv_name)
+    subgraphs = list(nx.connected_components(G))
+    pickle.dump(subgraphs, open('/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/result_%.3f.pickle'%thresh, 'wb'))

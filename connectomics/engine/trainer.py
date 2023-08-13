@@ -454,6 +454,7 @@ class Trainer(object):
         for chunk in tqdm(range(num_chunk)):
             csv_path = block_path[chunk]
             block_name = csv_path.split('/')[-1].split('.')[0]
+            print('getting block %s' % block_name)
             pc_result_path = os.path.join(pc_result_root_path, block_name)
             if not os.path.exists(pc_result_path):
                 os.makedirs(pc_result_path)
@@ -1017,6 +1018,16 @@ class Trainer(object):
                         volume_embedding_resize = torch.zeros(size=[embed_dim]+input_size, device=self.device).unsqueeze(dim=0)
                         volume_embedding_resize[:, :, (input_size[0]-image_input_size[0])//2: (input_size[0]+image_input_size[0])//2, :, :] = resize(volume_embedding)
                         volume_embedding = volume_embedding_resize
+                # for i in range(num_batch):
+                #     if pos is not None:
+                #         if np.all(pos[i] == pos_record) and i > 0:
+                #             volume_embedding_list.append(volume_embedding)
+                #             continue
+                #         pos_record = pos[i]
+                #     input_image = volume_image[i * image_batch_size:(i + 1) * image_batch_size].to(self.device,
+                #                                                                                    non_blocking=True)
+                #     input_image = input_image.unsqueeze(dim=1)
+                #     volume_embedding = self.image_model(input_image)
 
                     if self.cfg.MODEL.DROP_MOD:
                         if random.random() < 0.1:
