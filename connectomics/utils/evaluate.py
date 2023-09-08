@@ -712,12 +712,14 @@ def compute_ffn_erl():
     graph_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/result_0.980.pickle'
     proofread_subgraphs = pickle.load(open(graph_path, 'rb'))
     print(graph_path)
+    len_graphs = []
     for subgraph in proofread_subgraphs:
         subgraph = list(subgraph)
         mapped_id = subgraph[0]
+        len_graphs.append(len(subgraph))
         for id in subgraph:
             mapping[id] = mapped_id
-
+    print('average subgraph size: %f'% np.mean(np.array(len_graphs)))
     res = {}
     node_seg_lut = {}
     n_neurons = len(list(nx.connected_components(graph)))

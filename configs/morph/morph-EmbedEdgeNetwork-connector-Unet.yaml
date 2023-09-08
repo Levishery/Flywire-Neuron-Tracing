@@ -17,7 +17,7 @@ MODEL:
   MIXED_PRECESION: True
   MASK_EMBED: False
   IMAGE_MODEL_CFG: configs/test-Image-Unet-connector.yaml
-  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/ckpts/embeddings/checkpoint_best_Unet.pth
+  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/ckpts/embeddings/checkpoint_best_Unet2.pth
   DROP_MOD: False
 MONITOR:
   ITERATION_NUM: [20, 200]

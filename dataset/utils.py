@@ -14,6 +14,7 @@ import matplotlib.ticker as ticker
 from matplotlib import pyplot as plt
 import navis
 import h5py
+import re
 from cloudvolume.datasource.precomputed.skeleton.sharded import ShardedPrecomputedSkeletonSource
 from cloudvolume import CloudVolume
 from skimage.transform import resize
@@ -630,7 +631,7 @@ def plot_thresh():
     ax1.plot(rec0[9], acc0[9], 'r^')
     ax1.plot(rec1[9], acc1[9], 'b^')
     ax1.plot(rec2[9], acc2[9], 'g^')
-    ax1.plot(rec3[9], acc3[9], '^', color="skyblue")
+    ax1.plot(rec3[8], acc3[8], '^', color="skyblue")
     ax1.plot(rec4[9], acc4[9], '^', color="purple")
     ax1.plot(rec5[9], acc5[9], '^', color="gray")
     ax1.plot(rec6[9], acc6[9], '^', color="pink")
@@ -748,7 +749,7 @@ def plot_thresh():
     ax3.plot(rec0[9], acc0[9], 'r^')
     ax3.plot(rec1[9], acc1[9], 'b^')
     ax3.plot(rec2[9], acc2[9], 'g^')
-    ax3.plot(rec3[9], acc3[9], '^', color="skyblue")
+    ax3.plot(rec3[7], acc3[7], '^', color="skyblue")
     ax3.plot(rec4[9], acc4[9], '^', color="purple")
     ax3.plot(rec5[9], acc5[9], '^', color="gray")
     ax3.plot(rec6[9], acc6[9], '^', color="pink")
@@ -809,7 +810,7 @@ def plot_thresh():
     ax4.plot(rec0[9], acc0[9], 'r^')
     ax4.plot(rec1[9], acc1[9], 'b^')
     ax4.plot(rec2[9], acc2[9], 'g^')
-    ax4.plot(rec3[9], acc3[9], '^', color="skyblue")
+    ax4.plot(rec3[8], acc3[8], '^', color="skyblue")
     ax4.plot(rec4[9], acc4[9], '^', color="purple")
     ax4.plot(rec5[9], acc5[9], '^', color="gray")
     ax4.plot(rec6[9], acc6[9], '^', color="pink")
@@ -844,10 +845,10 @@ def plot_thresh_distort():
                  '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Unettest',
                  '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_pc',
                  '/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Intensitytest_2048']
-    # pred_path = ['/braindat/lab/liusl/flywire/block_data/v2/point_cloud/test_fps_2048/prediction_extract_pc_Intensitytest_2048']
+    pred_path = ['/braindat/lab/liusl/flywire/experiment/test-3k/Edge-Embed-2/predictions']
     list = pd.read_excel(path, header=None)
     target_type = [2, 1, 0, 0.5]
-    # target_type = [1]
+    target_type = [0]
     threshes = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
     # threshes = [0.5]
     for method in pred_path:
@@ -1228,10 +1229,12 @@ def get_evaluate_blocks():
     filepath_data = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/'
     block_csv_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/block'
     indexes = range(0,16)
+    edge_number = 0
     for index in indexes:
         file_name = 'evaluate_fafb_dust1200_dis500_rad0.3216_' + str(index) + '.csv'
         df = pd.read_csv(os.path.join(filepath_data, file_name), header=None)
         N = len(df)
+        edge_number += N
         for ii in tqdm(range(0, N)):
             segid1 = df.iloc[ii, 0]
             segid2 = df.iloc[ii, 1]
@@ -1244,18 +1247,69 @@ def get_evaluate_blocks():
                 [{'node0_segid': int(segid1), 'node1_segid': int(segid2), 'cord': cord, 'target': -1,
                   'prediction': -1, 'box_index': index}])
             row.to_csv(os.path.join(block_csv_path, block_name+ '.csv'), mode='a', header=False, index=False)
+    print('total edge number %d'%edge_number)
+
 
 def get_zebrafinch():
-    ZSTART, ZEND = 255, 383
-    YSTART, YEND = 1407, 1663
-    XSTART, XEND = 1535, 1791
-    vol = CloudVolume(
-        'https://storage.googleapis.com/j0126-nature-methods-data/GgwKmcKgrcoNxJccKuGIzRnQqfit9hnfK1ctZzNbnuU/ffn_segmentation',
-        mip=0, bounded=True, progress=False)
-    image_xyzc = vol[XSTART:XEND, YSTART:YEND, ZSTART:ZEND]
-    image_zyx = np.transpose(image_xyzc[..., 0], [2, 1, 0])
-    name = 'image_' + 'z' + str(ZSTART) + '-' + str(ZEND) + '_'+ 'y' + str(YSTART) + '-' + str(YEND) + 'x' + str(XSTART) + '-' + str(XEND) + '.h5'
-    writeh5('/braindat/zebrafinch/GT/'+name, image_zyx)
+    # annotation_path = '/braindat/zebrafinch/GT/gt_z255-383_y1407-1663_x1535-1791.h5'
+    # seg = readh5(annotation_path)
+    file_names = [
+        "gt_z255-383_y1407-1663_x1535-1791.h5",
+        "gt_z2559-2687_y4991-5247_x4863-5119.h5",
+        "gt_z2815-2943_y5631-5887_x4607-4863.h5",
+        "gt_z2834-2984_y5311-5461_x5077-5227.h5",
+        "gt_z2868-3018_y5744-5894_x5157-5307.h5",
+        "gt_z2874-3024_y5707-5857_x5304-5454.h5",
+        "gt_z2934-3084_y5115-5265_x5140-5290.h5",
+        "gt_z3096-3246_y5954-6104_x5813-5963.h5",
+        "gt_z3118-3268_y6538-6688_x6100-6250.h5",
+        "gt_z3126-3276_y6857-7007_x5694-5844.h5",
+        "gt_z3436-3586_y599-749_x2779-2929.h5",
+        "gt_z3438-3588_y2775-2925_x3476-3626.h5",
+        "gt_z3456-3606_y3188-3338_x4043-4193.h5",
+        "gt_z3492-3642_y7888-8038_x8374-8524.h5",
+        "gt_z3492-3642_y841-991_x381-531.h5",
+        "gt_z3596-3746_y3888-4038_x3661-3811.h5",
+        "gt_z3604-3754_y4101-4251_x3493-3643.h5",
+        "gt_z3608-3758_y3829-3979_x3423-3573.h5",
+        "gt_z3702-3852_y9605-9755_x2244-2394.h5",
+        "gt_z3710-3860_y8691-8841_x2889-3039.h5",
+        "gt_z3722-3872_y4548-4698_x2879-3029.h5",
+        "gt_z3734-3884_y4315-4465_x2209-2359.h5",
+        "gt_z3914-4064_y9035-9185_x2573-2723.h5",
+        "gt_z4102-4252_y6330-6480_x1899-2049.h5",
+        "gt_z4312-4462_y9341-9491_x2419-2569.h5",
+        "gt_z4440-4590_y7294-7444_x2350-2500.h5",
+        "gt_z4801-4951_y10154-10304_x1972-2122.h5",
+        "gt_z4905-5055_y928-1078_x1729-1879.h5",
+        "gt_z4951-5101_y9415-9565_x2272-2422.h5",
+        "gt_z5001-5151_y9426-9576_x2197-2347.h5",
+        "gt_z5119-5247_y1023-1279_x1663-1919.h5",
+        "gt_z5405-5555_y10490-10640_x3406-3556.h5",
+        "gt_z734-884_y9561-9711_x563-713.h5"
+    ]
+
+    for file_name in file_names:
+        # 使用字符串分割操作提取 Z、Y、X 范围
+        match = re.search(r"z(\d+)-(\d+)_y(\d+)-(\d+)_x(\d+)-(\d+)", file_name)
+
+        if match:
+            # 提取范围值
+            z_start, z_end, y_start, y_end, x_start, x_end = map(int, match.groups())
+        else:
+            print(file_name)
+        # 打印范围
+        print(f"ZSTART, ZEND = {z_start}, {z_end}")
+        print(f"YSTART, YEND = {y_start}, {y_end}")
+        print(f"XSTART, XEND = {x_start}, {x_end}")
+        print()
+        vol = CloudVolume(
+            'https://storage.googleapis.com/j0126-nature-methods-data/GgwKmcKgrcoNxJccKuGIzRnQqfit9hnfK1ctZzNbnuU/rawdata',
+            mip=0, bounded=True, progress=False)
+        image_xyzc = vol[x_start:x_end, y_start:y_end, z_start:z_end]
+        image_zyx = np.transpose(image_xyzc[..., 0], [2, 1, 0])
+        name = 'image_' + 'z' + str(z_start) + '-' + str(z_end) + '_'+ 'y' + str(y_start) + '-' + str(y_end) + 'x' + str(x_start) + '-' + str(x_end) + '.h5'
+        writeh5('/braindat/zebrafinch/GT/'+name, image_zyx)
 
 
 def get_connection_graph():
@@ -1264,12 +1318,14 @@ def get_connection_graph():
     train_path = '/braindat/lab/liusl/flywire/block_data/v2/30_percent_train_1000'
     # 创建一个无向图
     G = nx.Graph()
+    edge_num = 0
     csv_names = os.listdir(result_path)
     train_name = os.listdir(train_path)
     for csv_name in tqdm(csv_names):
         if csv_name not in train_name:
             try:
                 df = pd.read_csv(os.path.join(result_path, csv_name), header=None)
+                edge_num += len(df)
                 threshed_df = df[df.iloc[:, 4] > thresh]
                 for ii, row in threshed_df.iterrows():
                     # 添加边到图中
@@ -1282,5 +1338,111 @@ def get_connection_graph():
                 os.remove(os.path.join(result_path, csv_name))
         else:
             print('%s is in train'%csv_name)
+    print('total edge number %d'%edge_num)
     subgraphs = list(nx.connected_components(G))
     pickle.dump(subgraphs, open('/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/result_%.3f.pickle'%thresh, 'wb'))
+
+
+def get_prediction_distribution():
+    path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/block_result'
+    plot_path = '/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/evaluate_fafb/plot'
+    csv_names = os.listdir(path)
+    for csv_name in tqdm(csv_names):
+        df = pd.read_csv(os.path.join(path, csv_name), header=None)
+        prediction_list = []
+        for i in range(len(df)):
+            prediction_list.append(df.iloc[i,4])
+        prediction_list = np.asarray(prediction_list)
+        name = csv_name.split('.')[0].split('_')[1:]
+        name = name[0] + '_' + name[1] + '_' +name[2]
+        plt.figure(figsize=(4, 3))
+        plt.hist(prediction_list, bins=10, alpha=0.7, color='blue', edgecolor='black')
+        plt.gca().set_yscale('log')
+        # plt.ylim([1e3, 3e4])  # 设置y轴的上下限
+        plt.xlabel('Prediction')
+        plt.ylabel('Count (log scale)')
+        plt.title('block %s'%name)
+        plt.grid(True, which="both", ls="--", alpha=0.5)
+        plt.tight_layout()
+        # plt.show()
+        plt.savefig(os.path.join(plot_path, name+'.pdf'))
+
+def connection_score_plot():
+    target_tree_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/tree_data'
+    target_connector_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/connector_data'
+    visualization_path = '/braindat/lab/liusl/flywire/flywire_neuroskel/visualization'
+    connector_files = os.listdir(target_connector_path)
+    total_length = 0
+    edge_num = 0
+    score_num_dict = {}
+    score_length_dict = {}
+    for connector_f in tqdm(connector_files[:200]):
+        # block_list = define_block_list()
+        visualization_f = connector_f.replace('_connector.csv', '_save.csv')
+        neuron_id = visualization_f[:-9]
+        print('processing neuron', neuron_id)
+        df = pd.read_csv(os.path.join(target_connector_path, connector_f), index_col=0)
+        df_weight = pd.read_csv(os.path.join(visualization_path, visualization_f), index_col=0)
+        if len(df) > 10:
+            tree_f = connector_f.replace('_connector.csv', '.json')
+            tree = navis.read_json(os.path.join(target_tree_path, tree_f))[0]
+            max_strahler_index = tree.nodes.strahler_index.max()
+
+            for i in df.index:
+                weight1 = df_weight[str(int(df['node1_segid'][i]))][0]
+                weight0 = df_weight[str(int(df['node0_segid'][i]))][0]
+                score1 = 1 / ((1 / min(weight1, 40)) * (1 / min(weight0, 40)))
+                score2 = (1 / (max_strahler_index - int(df['Strahler order'][i].split('\n')[0].split(' ')[-1]) + 3))
+                score = score2 * score1
+                total_length += weight0 + weight1
+                edge_num +=1
+                if not score in score_num_dict.keys():
+                    score_num_dict[score] = 1
+                    score_length_dict[score] = (weight0+weight1)
+                else:
+                    score_num_dict[score] += 1
+                    score_length_dict[score] += 2*(weight0 * weight1)/(weight0 + weight1)
+        else:
+            print('invalid neuron', neuron_id)
+    x_values = list(score_num_dict.keys())
+    y_values = [score_length_dict[x] for x in x_values]
+    scatter_sizes = [score_num_dict[x] for x in x_values]
+
+    # # 创建散点图
+    # plt.figure(figsize=(8, 6))  # 图片大小为(8, 6)
+    # plt.scatter(x_values, y_values, s=scatter_sizes, alpha=0.7, edgecolors='w')
+    #
+    # # 添加标题和标签
+    # plt.title('Scatter Plot', fontsize=16)
+    # plt.xlabel('Connection score', fontsize=14)
+    # plt.ylabel('Skeleton coverage ratial', fontsize=14)
+    # plt.gca().set_xscale('log')
+    #
+    # # 显示图例
+    # plt.legend(['Data Points'], loc='upper left')
+    #
+    # # 显示网格线
+    # plt.grid(True)
+
+    fig, ax1 = plt.subplots(figsize=(6, 3))
+
+    # 绘制第一个直方图
+    custom_bins = [0.1, 0.18, 0.33, 0.59, 1, 1.8, 3.3, 5.94, 10, 18, 33, 59.4, 100, 180, 330, 590, 1000]
+    color = 'tab:blue'
+    hist, bins, _ = ax1.hist(x_values, bins=custom_bins, weights=scatter_sizes, alpha=0.7, color=color, edgecolor='black')
+    ax1.set_xlabel('Connection score')
+    ax1.set_ylabel('Count', color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+
+    # 在同一子图上绘制第二个直方图
+    ax2 = ax1.twinx()  # 共享x轴
+    color = 'tab:orange'
+    hist, bins, _ = ax2.hist(x_values, bins=custom_bins, weights=y_values, alpha=0.7, color=color,
+                             edgecolor='black')
+    ax2.set_ylabel('Sum of increase score in the bin', color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+    plt.gca().set_xscale('log')
+
+    fig.tight_layout()
+    # 显示图像
+    plt.show()

@@ -344,6 +344,20 @@ class Trainer(object):
         end = time.perf_counter()
         print("Prediction time: %.2fs" % (end - start))
 
+    def get_prediction_from_distance(self, volume):
+        pred = torch.zeros([volume.shape[0], 1])
+        for i in range(volume.shape[0]):
+            query_mask = volume[i, 0, :, :, :] > 0
+            candidate_mask = volume[i, 1, :, :, :] > 0
+            embedding = volume[i, 3:, :, :, :]
+            embedding_query = embedding[:, query_mask]
+            mean_query = torch.mean(embedding_query, dim=1)
+            embedding_candidate = embedding[:, candidate_mask]
+            mean_candidate = torch.mean(embedding_candidate, dim=1)
+            distance = torch.norm(mean_query - mean_candidate)
+            pred[i, 0] = int(distance < self.cfg.SOLVER.BASE_LR)
+        return pred
+
     def test_embededge(self, visualize_csv_path=None):
         r"""Inference function of the trainer class.
         """
@@ -363,14 +377,16 @@ class Trainer(object):
                 target = torch.tensor(np.expand_dims(np.asarray(sample.seg_start), axis=1))
                 ids = sample.candidates
                 volume, embedding = self.get_morph_input(volume)
+                # make prediction using segment embedding distance only
+                pred = self.get_prediction_from_distance(volume)
                 # visualize(volume, sample.out_input, index=22, mask=True)
                 # prediction
-                with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
-                    if self.cfg.MODEL.EMBED_REDUCTION is None:
-                        volume = volume.contiguous().to(self.device, non_blocking=True)
-                        pred = self.model(volume)
-                    else:
-                        pred = self.model(volume, embedding)
+                # with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
+                #     if self.cfg.MODEL.EMBED_REDUCTION is None:
+                #         volume = volume.contiguous().to(self.device, non_blocking=True)
+                #         pred = self.model(volume)
+                #     else:
+                #         pred = self.model(volume, embedding)
                 pred_record = pred.detach().cpu()
                 TP = sum(torch.logical_and(pred_record > 0.5, target == 1))
                 TP_total = TP_total + TP

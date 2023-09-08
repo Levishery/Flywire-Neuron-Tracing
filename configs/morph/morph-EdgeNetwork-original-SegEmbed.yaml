@@ -16,7 +16,7 @@ MODEL:
   TARGET_OPT: ["0"]
   MIXED_PRECESION: True
   MASK_EMBED: False
-  IMAGE_MODEL_CFG: configs/test-neuron-swin-connector.yaml
+  IMAGE_MODEL_CFG: configs/test-Image-Unet-connector.yaml
   IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/ckpts/embeddings/checkpoint_best_metric_embedding.pth
   DROP_MOD: False
 MONITOR:
