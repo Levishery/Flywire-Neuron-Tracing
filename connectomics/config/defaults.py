@@ -146,6 +146,8 @@ _C.DATASET.INPUT_PATH = 'path/to/input'
 _C.DATASET.VAL_PATH = None
 _C.DATASET.OUTPUT_PATH = 'path/to/output'
 _C.DATASET.IS_ABSOLUTE_PATH = False
+_C.DATASET.VOL_FFN1_PATH = 'file:///braindat/lab/lizl/google/google_16.0x16.0x40.0'
+_C.DATASET.BLOCK_IMAGE_PATH = '/braindat/lab/liusl/flywire/block_data/fafbv14'
 
 # Specify whether the data is isotropic or not.
 _C.DATASET.IS_ISOTROPIC = False

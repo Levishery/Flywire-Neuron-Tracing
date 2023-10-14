@@ -45,6 +45,8 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
                  pad_size: List[int] = [0, 0, 0],
                  pad_mode: str = 'replicate',
                  connector_dataset=False,
+                 vol_ffn1_path='file:///braindat/lab/lizl/google/google_16.0x16.0x40.0',
+                 block_image_path='/braindat/lab/liusl/flywire/block_data/fafbv14',
                  **kwargs):
 
         self.start_cord = []
@@ -63,8 +65,8 @@ class MultiVolumeDataset(torch.utils.data.Dataset):
         self.chunk_iter = chunk_iter
         self.connector_dataset = connector_dataset
         if self.connector_dataset:
-            self.vol_ffn1 = CloudVolume('file:///braindat/lab/lizl/google/google_16.0x16.0x40.0')
-            self.block_image_path = '/braindat/lab/liusl/flywire/block_data/fafbv14'
+            self.vol_ffn1 = CloudVolume(vol_ffn1_path)
+            self.block_image_path = block_image_path
 
     def updatechunk(self, do_load=True):
         r"""Update the coordinates to a new chunk in the large volume.

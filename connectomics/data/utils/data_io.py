@@ -1,4 +1,6 @@
 from __future__ import print_function, division
+
+import pickle
 from typing import Optional, List
 
 import os
@@ -9,6 +11,31 @@ import numpy as np
 import imageio
 from scipy.ndimage import zoom
 import pandas as pd
+
+
+def fafb_to_block(x, y, z, return_pixel=False):
+    '''
+    (x,y,z):fafb坐标
+    (x_block,y_block,z_block):block块号
+    (x_pixel,y_pixel,z_pixel):块内像素号,其中z为帧序号,为了使得z属于中间部分,强制z属于[29,54)
+    文件名：z/y/z-xxx-y-xx-x-xx
+    '''
+    x_block_float = (x + 17631) / 1736 / 4
+    y_block_float = (y + 19211) / 1736 / 4
+    z_block_float = (z - 15) / 26
+    x_block = math.floor(x_block_float)
+    y_block = math.floor(y_block_float)
+    z_block = math.floor(z_block_float)
+    x_pixel = (x_block_float - x_block) * 1736
+    y_pixel = (y_block_float - y_block) * 1736
+    z_pixel = (z - 15) - z_block * 26
+    while z_pixel < 28:
+        z_block = z_block - 1
+        z_pixel = z_pixel + 26
+    if return_pixel:
+        return x_block, y_block, z_block, np.round(x_pixel), np.round(y_pixel), np.round(z_pixel)
+    else:
+        return x_block, y_block, z_block
 
 
 def readimg_as_vol(filename, drop_channel=True):
@@ -38,13 +65,13 @@ def stat_biological_recall(potential_path):
     block_paths = [
         '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/%s.csv' % (name_prefix + str(z_start)),
         '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/%s.csv' % (
-                    name_prefix + str(z_start + 1)),
+                name_prefix + str(z_start + 1)),
         '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/%s.csv' % (
-                    name_prefix + str(z_start + 2)),
+                name_prefix + str(z_start + 2)),
         '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/%s.csv' % (
-                    name_prefix + str(z_start + 3)),
+                name_prefix + str(z_start + 3)),
         '/braindat/lab/liusl/flywire/block_data/v2/30_percent_test_3000_reformat/%s.csv' % (
-                    name_prefix + str(z_start + 4))]
+                name_prefix + str(z_start + 4))]
 
     edges = pd.read_csv(potential_path, header=None)
     total_positives = 0
@@ -199,7 +226,6 @@ def vast2Seg(seg):
             np.uint32)
 
 
-
 def tile2volume(tiles: List[str], coord: List[int], coord_m: List[int], tile_sz: int,
                 dt: type = np.uint8, tile_st: List[int] = [0, 0], tile_ratio: float = 1.0,
                 do_im: bool = True, background: int = 128) -> np.ndarray:
@@ -267,3 +293,32 @@ def tile2volume(tiles: List[str], coord: List[int], coord_m: List[int], tile_sz:
         result = np.pad(
             result, ((bd[0], bd[1]), (bd[2], bd[3]), (bd[4], bd[5])), 'reflect')
     return result
+
+
+def get_blocknames_from_points(input_file_path):
+    if not os.path.exists(input_file_path):
+        csv_path = input_file_path.split('.')[0]
+        os.makedirs(csv_path, exist_ok=True)
+        with open(input_file_path, "rb") as f:
+            seq_data = pickle.load(f)
+        for j in range(len(seq_data)):
+            seq = seq_data[j]
+            points = seq[1]
+            for i in range(points.shape[0]):
+                point = points[i, :]
+                candidates = list(seq[0])
+                x_block, y_block, z_block = fafb_to_block(point[0], point[1], point[2])
+                block_name = 'connector_' + str(x_block) + '_' + str(y_block) + '_' + str(z_block)
+                row = pd.DataFrame(
+                    [{'node0_segid': int(j), 'node1_segid': str(candidates), 'cord': point, 'target': int(i),
+                      'prediction': -1}])
+                row.to_csv(os.path.join(csv_path, block_name + '.csv'), mode='a', header=False, index=False)
+    else:
+        with open(input_file_path+'.pkl', "rb") as f:
+            seq_data = pickle.load(f)
+        csv_path = input_file_path
+    return seq_data, csv_path
+
+
+def save_feature(seq_data, file_path):
+    pickle.dumps(seq_data, file_path)

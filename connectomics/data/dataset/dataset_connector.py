@@ -486,7 +486,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
             out_label = morph_list
         return pos, out_volume, out_label, seg_start, candidates
 
-    def get_test_sample(self, connector, morphology=True):
+    def get_test_sample(self, connector, morphology=True, max_candidate=50):
         cord = connector[2][1:-1].split()
         cord = [item for item in cord if item != ""]
         if len(cord) == 4:
@@ -507,11 +507,25 @@ class ConnectorDataset(torch.utils.data.Dataset):
         out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
 
         if morphology:
-            seg_0_morph = np.expand_dims(np.array(out_label == seg_start), 0)
-            seg_1_morph = np.expand_dims(np.array(out_label == seg_candidate), 0)
-            seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
-            out_volume = np.concatenate((out_volume, seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
-                                          seg_combined_morph.astype(np.float32)))
+            if isinstance(seg_candidate, str):
+                candidates = seg_candidate[1:-1].split(',')
+                candidates = [int(x) for x in candidates]
+                while len(candidates) < max_candidate:
+                    candidates.append(int(0))
+                morph = np.zeros([max_candidate+1, out_label.shape[0], out_label.shape[1], out_label.shape[2]]).astype(np.float32)
+                morph[0, :, :, :] = out_volume
+                index = 1
+                for candidate in candidates:
+                    morph[index, :, :, :] = np.expand_dims(np.array(out_label == candidate), 0).astype(np.float32)
+                    index += 1
+                return pos, morph, out_label, [int(seg_start), connector[3]], candidates
+            else:
+                seg_0_morph = np.expand_dims(np.array(out_label == seg_start), 0)
+                seg_1_morph = np.expand_dims(np.array(out_label == seg_candidate), 0)
+                seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
+                out_volume = np.concatenate((out_volume, seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
+                                              seg_combined_morph.astype(np.float32)))
+                return pos, out_volume, out_label, connector[3], [seg_start, seg_candidate]
             # # for lyx
             # if int(connector[3]) < 1:
             #     out_morph = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
@@ -527,8 +541,6 @@ class ConnectorDataset(torch.utils.data.Dataset):
             #     ds = fid.create_dataset('main', out_morph.shape, compression="gzip", dtype=out_morph.dtype)
             #     ds[:] = out_morph
             #     fid.close()
-
-        return pos, out_volume, out_label, connector[3], [seg_start, seg_candidate]
 
     def make_test_samples(self, connector):
         """

@@ -245,6 +245,8 @@ def get_dataset(cfg,
         "morphology_dataset": cfg.DATASET.MORPHOLOGY_DATSET,
         "relabel": cfg.DATASET.RELABEL,
         "ssl": False if cfg.MODEL.SSL == 'none' else True,
+        "vol_ffn1_path": cfg.DATASET.VOL_FFN1_PATH,
+        "block_image_path": cfg.DATASET.BLOCK_IMAGE_PATH,
     }
     if cfg.DATASET.DO_MULTI_VOLUME:  # build MultiVolumeDataset
         if mode == 'val':

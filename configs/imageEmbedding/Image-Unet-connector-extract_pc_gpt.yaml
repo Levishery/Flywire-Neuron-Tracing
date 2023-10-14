@@ -1,0 +1,76 @@
+# learn dense 3d image embedding with V-net
+SYSTEM:
+  NUM_GPUS: 1
+  NUM_CPUS: 0
+MODEL:
+#  EMBED_REDUCTION:
+  INPUT_SIZE: [ 17, 129, 129 ]
+  OUTPUT_SIZE: [ 17, 129, 129 ]
+  ARCHITECTURE: unet_3d
+  BLOCK_TYPE: residual_se
+  FILTERS: [32, 64, 96, 128, 160]
+  IN_PLANES: 19
+  OUT_PLANES: 16
+  TARGET_OPT: ["e"]
+  LOSS_OPTION:
+    [[ "DiscriminativeLoss", "ConnectionLoss" ]]
+  LOSS_WEIGHT: [[ 1.0, 1.0 ]]
+  WEIGHT_OPT: [[ "0", "0" ]]
+  OUTPUT_ACT: [[ "none",  "none" ]]
+  IMAGE_MODEL_CFG: configs/test-Image-Unet-connector.yaml
+  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/ckpts/embeddings/checkpoint_best_Unet2.pth
+MONITOR:
+  ITERATION_NUM: [20, 200]
+SOLVER:
+  LR_SCHEDULER_NAME: "WarmupMultiStepLR"
+  DECAY_LOSS_WEIGHT: True
+  NAME: AdamW
+  BASE_LR: 2e-03
+  WARMUP_FACTOR: 2e-5
+  WARMUP_ITERS: 50000
+  STEPS: (250000, 350000)
+  ITERATION_SAVE: 8000
+  ITERATION_TOTAL: 500000
+  ITERATION_VAL: 4000
+  SAMPLES_PER_BATCH: 64 # PER GPU
+DATASET:
+  CONNECTOR_DATSET: True
+  MORPHOLOGY_DATSET: True
+#  INPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_corrs.pkl
+  INPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_corrs
+  IMAGE_NAME:
+  LABEL_NAME:
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
+  DO_MULTI_VOLUME: True
+  DISTRIBUTED: True
+  VOL_FFN1_PATH: file:///braindat/lab/lizl/google/google_16.0x16.0x40.0
+  BLOCK_IMAGE_PATH: /braindat/lab/liusl/flywire/block_data/fafbv14
+INFERENCE:
+  OUTPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_imagefeature.pkl
+  GET_PC_FEATURE: GPT
+  OUTPUT_ACT: ["none"]
+  SAMPLES_PER_BATCH: 4 # per gpu
+AUGMENTOR:
+  SMOOTH: False
+  MISSINGPARTS:
+    ENABLED: False
+  MISSINGSECTION:
+    ENABLED: False
+  CUTNOISE:
+    ENABLED: False
+  CUTBLUR:
+    ENABLED: False
+  ROTATE:
+    ENABLED: True
+  RESCALE:
+    ENABLED: True
+  FLIP:
+    ENABLED: True
+  ELASTIC:
+    ENABLED: False
+  GRAYSCALE:
+    ENABLED: False
+  MISALIGNMENT:
+    ENABLED: False
+  MOTIONBLUR:
+    ENABLED: False

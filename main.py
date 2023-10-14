@@ -11,6 +11,7 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 
 from connectomics.config import load_cfg, save_all_cfg
+from connectomics.data.utils import get_blocknames_from_points, save_feature
 from connectomics.engine import Trainer, SSL_Trainer
 
 
@@ -59,6 +60,8 @@ def main():
     cfg = load_cfg(args)
     cfg_image_model = None
     args_image_model = None
+    if cfg.INFERENCE.GET_PC_FEATURE == 'GPT':
+        seq_data = get_blocknames_from_points(cfg.DATASET.INPUT_PATH)
     if cfg.MODEL.IMAGE_MODEL_CFG is not None:
         args_image_model = get_args()
         args_image_model.config_file = cfg.MODEL.IMAGE_MODEL_CFG
@@ -94,6 +97,7 @@ def main():
     cudnn.benchmark = True
 
     mode = 'test' if args.inference else 'train'
+
     if cfg.MODEL.SSL == 'none':
         trainer = Trainer(cfg, device, mode,
                           rank=args.local_rank,
@@ -119,6 +123,9 @@ def main():
                 trainer.get_pc_feature_test(mode, rank=args.local_rank)
             elif cfg.INFERENCE.GET_PC_FEATURE == 'Train':
                 trainer.get_pc_feature(mode, rank=args.local_rank)
+            elif cfg.INFERENCE.GET_PC_FEATURE == 'GPT':
+                result_center_cord_dict, result_fafb_cord_dict, result_embedding_dict = trainer.get_pc_feature_gpt(mode, rank=args.local_rank)
+                save_feature([result_center_cord_dict, result_fafb_cord_dict, result_embedding_dict], cfg.DATASET.OUTPUT_PATH)
         elif cfg.INFERENCE.GET_PATCH_FEATURE:
             trainer.test_patch(mode, rank=args.local_rank)
         else:

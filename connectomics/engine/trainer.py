@@ -239,7 +239,8 @@ class Trainer(object):
                         pred = self.model(volume, embedding)
                     loss, _ = self.criterion(pred, target, weight)
                     val_loss += loss.data
-                if self.cfg.DATASET.CONNECTOR_DATSET and not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET):
+                if self.cfg.DATASET.CONNECTOR_DATSET and not (
+                        self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET):
                     distance_pos, distance_neg, classification, rank = get_connection_distance(pred, target)
                     distance_neg_list.append(distance_neg)
                     distance_pos_list.append(distance_pos)
@@ -278,7 +279,8 @@ class Trainer(object):
                 self.monitor.logger.log_tb.add_scalar(
                     '%s_Validation_classifaction_accuracy' % name, accuracy, iter_total)
                 # self.monitor.plot_3d(pred, target, volume, iter_total, name='val', pos_data=sample.pos)
-            if self.cfg.DATASET.CONNECTOR_DATSET and not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET):
+            if self.cfg.DATASET.CONNECTOR_DATSET and not (
+                    self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET):
                 self.monitor.plot_distance(distance_pos_list, distance_neg_list, iter_total, name=name)
                 accuracy = sum(classification_list) / len(classification_list)
                 ave_rank = sum(rank_list) / len(rank_list)
@@ -447,7 +449,6 @@ class Trainer(object):
 
             self.test()
 
-
     def get_pc_feature_test(self, mode: str, rank=None):
         r"""get point cloud point image features.
         """
@@ -494,7 +495,8 @@ class Trainer(object):
                         label = sample.seg_start
                         for idx in range(len(seg_ids)):
                             name = str(seg_ids[idx][0]) + '_' + str(seg_ids[idx][1]) + '.ply'
-                            pc_ply_path = os.path.join(pc_path, 'evaluate_fafb_dust1200_dis500_rad0.3216_' +str(label[idx]))
+                            pc_ply_path = os.path.join(pc_path,
+                                                       'evaluate_fafb_dust1200_dis500_rad0.3216_' + str(label[idx]))
                             if os.path.exists(os.path.join(pc_ply_path, name)):
                                 try:
                                     pc = PlyData.read(os.path.join(pc_ply_path, name))
@@ -507,14 +509,16 @@ class Trainer(object):
                                 y = pc.elements[0].data['y']
                                 z = pc.elements[0].data['z']
                                 ids = pc.elements[0].data['id']
-                                cords = np.transpose(np.asarray([x, y, z]) / np.expand_dims(np.asarray([4, 4, 40]), axis=1),
-                                                     [1, 0])
+                                cords = np.transpose(
+                                    np.asarray([x, y, z]) / np.expand_dims(np.asarray([4, 4, 40]), axis=1),
+                                    [1, 0])
                                 embeddings = np.zeros([len(x), 16])
                                 in_box_indexes = np.where(select_points(bbox, cords))[0]
                                 for in_box_index in in_box_indexes:
                                     cord_in_patch = np.round((cords[in_box_index] - patch_cord) / [4, 4, 1]).astype(
                                         np.int32)
-                                    [x_bound, y_bound, z_bound] = get_crop_index(cord_in_patch, half_patch_size, patch_size)
+                                    [x_bound, y_bound, z_bound] = get_crop_index(cord_in_patch, half_patch_size,
+                                                                                 patch_size)
                                     # mask the local embedding with interested segmentation mask
                                     local_mask = volume[idx, ids[in_box_index], z_bound[0]:z_bound[1],
                                                  x_bound[0]:x_bound[1], y_bound[0]:y_bound[1]] == 1
@@ -533,10 +537,92 @@ class Trainer(object):
                                         embeddings[in_box_index, 0] = mean_embed.detach().cpu().numpy()
                                 writeh5(os.path.join(pc_result_path, name.replace('.ply', '.h5')), embeddings)
                             else:
-                                print('warning: %s'%os.path.join(pc_ply_path, name))
+                                print('warning: %s' % os.path.join(pc_ply_path, name))
 
         return
 
+    def get_pc_feature_gpt(self, mode: str, rank=None, n_point=8):
+        r"""get point cloud point image features.
+        """
+        self.dataset = get_dataset(self.cfg, self.augmentor, mode, rank=rank)
+        num_chunk = len(self.dataset.volume_path)
+        print("Total number of chunks: ", num_chunk)
+        half_patch_size = np.asarray([3, 3, 1])
+        patch_size = np.asarray(
+            [self.cfg.MODEL.INPUT_SIZE[1], self.cfg.MODEL.INPUT_SIZE[2], self.cfg.MODEL.INPUT_SIZE[0]])
+        block_path = self.dataset.volume_path.copy()
+        random.seed(time.time())
+        random.shuffle(block_path)
+        result_embedding_dict = {}
+        result_fafb_cord_dict = {}
+        result_center_cord_dict = {}
+        for chunk in tqdm(range(num_chunk)):
+            csv_path = block_path[chunk]
+            block_name = csv_path.split('/')[-1].split('.')[0]
+            print('getting block %s' % block_name)
+            csv_list = pd.read_csv(csv_path, header=None)
+            try:
+                self.dataset.updatechunk_given_path(csv_path)
+                self.dataloader = build_dataloader(self.cfg, None, mode, dataset=self.dataset.dataset)
+                self.dataloader = iter(self.dataloader)
+            except:
+                print('image not download')
+                continue
+            block_start_cord = self.dataset.start_cord
+            start = time.perf_counter()
+            with torch.no_grad():
+                for i, sample in enumerate(self.dataloader):
+                    print('progress: %d/%d batches, total time %.2fs' %
+                          (i + 1, len(self.dataloader), time.perf_counter() - start))
+                    volume = sample.out_input
+                    seg_ids = sample.candidates
+                    volume, _ = self.get_morph_input(volume, sample.pos)
+                    label = sample.seg_start
+                    for idx in range(len(seg_ids)):
+                        # index in batch
+                        patch_cord = np.asarray(block_start_cord) + np.asarray(
+                            [sample.pos[idx][2] * 4, sample.pos[idx][3] * 4, sample.pos[idx][1]])
+                        center_cord = patch_cord + patch_size * [4,4,1] / 2
+                        dict_idx = label[idx]
+                        candidates = seg_ids[idx]
+                        embedding_patch = volume[idx, -16:, :]
+                        masks = volume[idx, :-16, :]
+                        embedding_list = []
+                        points_cord_fafb_list = []
+                        for candidate_idx in range(len(candidates)):
+                            # index candidates
+                            id = candidates[candidate_idx]
+                            if id == 0:
+                                continue
+                            mask = masks[candidate_idx].cpu()
+                            embeddings = np.zeros([n_point, 16])
+                            points_cord_fafb = np.zeros([n_point, 3])
+                            if not mask.any():
+                                embedding_list.append(embeddings)
+                                points_cord_fafb_list.append(points_cord_fafb)
+                                continue
+                            # get n_point points per candidates
+                            locs = np.asarray(np.where(mask > 0))
+                            for loc_idx in range(n_point):
+                                point_idx = random.randint(0, locs.shape[1]-1)
+                                cord_in_patch = np.asarray([locs[1, point_idx], locs[2, point_idx], locs[0, point_idx]]) #zyx to xyz
+                                cord_fafb = patch_cord + cord_in_patch * [4, 4, 1]
+                                points_cord_fafb[loc_idx, :] = cord_fafb
+                                [x_bound, y_bound, z_bound] = get_crop_index(cord_in_patch, half_patch_size,
+                                                                             patch_size)
+                                # mask the local embedding with interested segmentation mask
+                                local_mask = mask[z_bound[0]:z_bound[1],
+                                             x_bound[0]:x_bound[1], y_bound[0]:y_bound[1]] == 1
+                                local_embed = embedding_patch[:, z_bound[0]:z_bound[1], x_bound[0]:x_bound[1],
+                                              y_bound[0]:y_bound[1]]
+                                mean_embed = torch.mean(local_embed[:, local_mask], dim=1)
+                                embeddings[loc_idx, :] = mean_embed.detach().cpu().numpy()
+                            embedding_list.append(embeddings)
+                            points_cord_fafb_list.append(points_cord_fafb)
+                        result_embedding_dict[dict_idx[0], dict_idx[1]] = embedding_list
+                        result_fafb_cord_dict[dict_idx[0], dict_idx[1]] = points_cord_fafb_list
+                        result_center_cord_dict[dict_idx[0], dict_idx[1]] = center_cord
+        return result_center_cord_dict, result_fafb_cord_dict, result_embedding_dict
 
     def get_pc_feature(self, mode: str, rank=None):
         r"""get point cloud point image features.
@@ -565,7 +651,8 @@ class Trainer(object):
             pc_ply_path_pos = os.path.join(pc_path_pos, block_name)
             pc_ply_path_neg = os.path.join(pc_path_neg, block_name)
             pc_result_path = os.path.join(pc_result_root_path, block_name)
-            if os.path.exists(pc_ply_path_neg) and os.path.exists(pc_ply_path_pos) and not os.path.exists(pc_result_path):
+            if os.path.exists(pc_ply_path_neg) and os.path.exists(pc_ply_path_pos) and not os.path.exists(
+                    pc_result_path):
                 os.makedirs(pc_result_path)
                 csv_list = pd.read_csv(csv_path, header=None)
                 self.dataset.updatechunk_given_path(csv_path)
@@ -596,14 +683,16 @@ class Trainer(object):
                                 y = pc.elements[0].data['y']
                                 z = pc.elements[0].data['z']
                                 ids = pc.elements[0].data['id']
-                                cords = np.transpose(np.asarray([x, y, z]) / np.expand_dims(np.asarray([4, 4, 40]), axis=1),
-                                                     [1, 0])
+                                cords = np.transpose(
+                                    np.asarray([x, y, z]) / np.expand_dims(np.asarray([4, 4, 40]), axis=1),
+                                    [1, 0])
                                 embeddings = np.zeros([len(x), 16])
                                 in_box_indexes = np.where(select_points(bbox, cords))[0]
                                 for in_box_index in in_box_indexes:
                                     cord_in_patch = np.round((cords[in_box_index] - patch_cord) / [4, 4, 1]).astype(
                                         np.int32)
-                                    [x_bound, y_bound, z_bound] = get_crop_index(cord_in_patch, half_patch_size, patch_size)
+                                    [x_bound, y_bound, z_bound] = get_crop_index(cord_in_patch, half_patch_size,
+                                                                                 patch_size)
                                     # mask the local embedding with interested segmentation mask
                                     local_mask = volume[idx, ids[in_box_index], z_bound[0]:z_bound[1],
                                                  x_bound[0]:x_bound[1], y_bound[0]:y_bound[1]] == 1
@@ -649,7 +738,8 @@ class Trainer(object):
         # write h5 dataset
         os.makedirs(embedding_z_path, exist_ok=True)
         fid = h5py.File(embedding_path, 'w')
-        dataset = PatchDataset(patch_path, self.cfg.MODEL.INPUT_SIZE, data_mean=self.cfg.DATASET.MEAN, data_std=self.cfg.DATASET.STD)
+        dataset = PatchDataset(patch_path, self.cfg.MODEL.INPUT_SIZE, data_mean=self.cfg.DATASET.MEAN,
+                               data_std=self.cfg.DATASET.STD)
         self.dataloader = build_dataloader(self.cfg, self.augmentor, self.mode, dataset, self.rank)
         self.dataloader = iter(self.dataloader)
         self.model.eval() if self.cfg.INFERENCE.DO_EVAL else self.model.train()
@@ -666,7 +756,8 @@ class Trainer(object):
                 volume_embedding = self.image_model(volume)
                 volume_embedding = volume_embedding.cpu().numpy().astype(np.float16)
                 for index_patch in range(len(pos)):
-                    ds = fid.create_dataset(pos[index_patch], volume_embedding[index_patch].shape, compression="gzip", dtype=volume_embedding.dtype)
+                    ds = fid.create_dataset(pos[index_patch], volume_embedding[index_patch].shape, compression="gzip",
+                                            dtype=volume_embedding.dtype)
                     ds[:] = volume_embedding[index_patch]
 
                 if torch.cuda.is_available() and i % 5 == 0:
@@ -970,8 +1061,6 @@ class Trainer(object):
             row.to_csv(result_path, mode='a', header=False, index=False)
             return
 
-
-
     def xpblock_to_fafb(self, z_block, y_block, x_block, z_coo=0, y_coo=0, x_coo=0):
         '''
         函数功能:xp集群上的点到fafb原始坐标的转换
@@ -1023,7 +1112,9 @@ class Trainer(object):
                     input_image = volume_image[i * image_batch_size:(i + 1) * image_batch_size].unsqueeze(dim=0)
                     if not image_input_size == input_size:
                         resize = torch.nn.Upsample(size=image_input_size)
-                        input_image = input_image[:, :, (input_size[0]-image_input_size[0])//2: (input_size[0]+image_input_size[0])//2, :, :]
+                        input_image = input_image[:, :, (input_size[0] - image_input_size[0]) // 2: (input_size[0] +
+                                                                                                     image_input_size[
+                                                                                                         0]) // 2, :, :]
                         input_image = resize(input_image)
 
                     input_image = input_image.to(self.device, non_blocking=True)
@@ -1031,19 +1122,22 @@ class Trainer(object):
                     volume_embedding = self.image_model(input_image)
                     if not image_input_size == input_size:
                         resize = torch.nn.Upsample(size=[image_input_size[0], input_size[1], input_size[2]])
-                        volume_embedding_resize = torch.zeros(size=[embed_dim]+input_size, device=self.device).unsqueeze(dim=0)
-                        volume_embedding_resize[:, :, (input_size[0]-image_input_size[0])//2: (input_size[0]+image_input_size[0])//2, :, :] = resize(volume_embedding)
+                        volume_embedding_resize = torch.zeros(size=[embed_dim] + input_size,
+                                                              device=self.device).unsqueeze(dim=0)
+                        volume_embedding_resize[:, :,
+                        (input_size[0] - image_input_size[0]) // 2: (input_size[0] + image_input_size[0]) // 2, :,
+                        :] = resize(volume_embedding)
                         volume_embedding = volume_embedding_resize
-                # for i in range(num_batch):
-                #     if pos is not None:
-                #         if np.all(pos[i] == pos_record) and i > 0:
-                #             volume_embedding_list.append(volume_embedding)
-                #             continue
-                #         pos_record = pos[i]
-                #     input_image = volume_image[i * image_batch_size:(i + 1) * image_batch_size].to(self.device,
-                #                                                                                    non_blocking=True)
-                #     input_image = input_image.unsqueeze(dim=1)
-                #     volume_embedding = self.image_model(input_image)
+                    # for i in range(num_batch):
+                    #     if pos is not None:
+                    #         if np.all(pos[i] == pos_record) and i > 0:
+                    #             volume_embedding_list.append(volume_embedding)
+                    #             continue
+                    #         pos_record = pos[i]
+                    #     input_image = volume_image[i * image_batch_size:(i + 1) * image_batch_size].to(self.device,
+                    #                                                                                    non_blocking=True)
+                    #     input_image = input_image.unsqueeze(dim=1)
+                    #     volume_embedding = self.image_model(input_image)
 
                     if self.cfg.MODEL.DROP_MOD:
                         if random.random() < 0.1:
