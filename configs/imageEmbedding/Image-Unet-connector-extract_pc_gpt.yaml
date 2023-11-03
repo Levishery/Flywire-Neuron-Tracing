@@ -37,7 +37,7 @@ DATASET:
   CONNECTOR_DATSET: True
   MORPHOLOGY_DATSET: True
 #  INPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_corrs.pkl
-  INPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_corrs
+  INPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_corrs_v3
   IMAGE_NAME:
   LABEL_NAME:
   OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
@@ -46,7 +46,7 @@ DATASET:
   VOL_FFN1_PATH: file:///braindat/lab/lizl/google/google_16.0x16.0x40.0
   BLOCK_IMAGE_PATH: /braindat/lab/liusl/flywire/block_data/fafbv14
 INFERENCE:
-  OUTPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_imagefeature.pkl
+  OUTPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_imagefeature_v3
   GET_PC_FEATURE: GPT
   OUTPUT_ACT: ["none"]
   SAMPLES_PER_BATCH: 4 # per gpu

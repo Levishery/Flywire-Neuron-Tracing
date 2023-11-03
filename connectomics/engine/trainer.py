@@ -34,7 +34,7 @@ from ..data.augmentation import build_train_augmentor, TestAugmentor
 from ..data.dataset import build_dataloader, get_dataset, ConnectorDataset, PatchDataset
 from ..data.dataset.build import _get_file_list, _make_path_list
 from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking, pca_emb, \
-    readh5
+    readh5, save_feature
 from ..data.utils import get_padsize, array_unpad, readvol, patch_rand_drop, stat_biological_recall, select_points, \
     get_crop_index
 
@@ -560,6 +560,9 @@ class Trainer(object):
             csv_path = block_path[chunk]
             block_name = csv_path.split('/')[-1].split('.')[0]
             print('getting block %s' % block_name)
+            block_embedding_dict = {}
+            block_fafb_cord_dict = {}
+            block_center_cord_dict = {}
             csv_list = pd.read_csv(csv_path, header=None)
             try:
                 self.dataset.updatechunk_given_path(csv_path)
@@ -619,9 +622,17 @@ class Trainer(object):
                                 embeddings[loc_idx, :] = mean_embed.detach().cpu().numpy()
                             embedding_list.append(embeddings)
                             points_cord_fafb_list.append(points_cord_fafb)
+                        # torch.norm(torch.mean(torch.tensor(embedding_list[1]), dim=0) - torch.mean(
+                        #     torch.tensor(embedding_list[3]), dim=0))
                         result_embedding_dict[dict_idx[0], dict_idx[1]] = embedding_list
                         result_fafb_cord_dict[dict_idx[0], dict_idx[1]] = points_cord_fafb_list
                         result_center_cord_dict[dict_idx[0], dict_idx[1]] = center_cord
+
+                        block_embedding_dict[dict_idx[0], dict_idx[1]] = embedding_list
+                        block_fafb_cord_dict[dict_idx[0], dict_idx[1]] = points_cord_fafb_list
+                        block_center_cord_dict[dict_idx[0], dict_idx[1]] = center_cord
+            os.makedirs(os.path.join(self.cfg.DATASET.OUTPUT_PATH, block_name))
+            save_feature([result_center_cord_dict, result_fafb_cord_dict, result_embedding_dict], os.path.join(self.cfg.DATASET.OUTPUT_PATH, block_name))
         return result_center_cord_dict, result_fafb_cord_dict, result_embedding_dict
 
     def get_pc_feature(self, mode: str, rank=None):

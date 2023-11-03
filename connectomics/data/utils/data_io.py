@@ -11,6 +11,7 @@ import numpy as np
 import imageio
 from scipy.ndimage import zoom
 import pandas as pd
+from tqdm import tqdm
 
 
 def fafb_to_block(x, y, z, return_pixel=False):
@@ -297,11 +298,10 @@ def tile2volume(tiles: List[str], coord: List[int], coord_m: List[int], tile_sz:
 
 def get_blocknames_from_points(input_file_path):
     if not os.path.exists(input_file_path):
-        csv_path = input_file_path.split('.')[0]
-        os.makedirs(csv_path, exist_ok=True)
-        with open(input_file_path, "rb") as f:
+        os.makedirs(input_file_path, exist_ok=True)
+        with open(input_file_path + '.pkl', "rb") as f:
             seq_data = pickle.load(f)
-        for j in range(len(seq_data)):
+        for j in tqdm(range(len(seq_data))):
             seq = seq_data[j]
             points = seq[1]
             for i in range(points.shape[0]):
@@ -312,13 +312,14 @@ def get_blocknames_from_points(input_file_path):
                 row = pd.DataFrame(
                     [{'node0_segid': int(j), 'node1_segid': str(candidates), 'cord': point, 'target': int(i),
                       'prediction': -1}])
-                row.to_csv(os.path.join(csv_path, block_name + '.csv'), mode='a', header=False, index=False)
+                row.to_csv(os.path.join(input_file_path, block_name + '.csv'), mode='a', header=False, index=False)
     else:
-        with open(input_file_path+'.pkl', "rb") as f:
+        with open(input_file_path + '.pkl', "rb") as f:
             seq_data = pickle.load(f)
-        csv_path = input_file_path
-    return seq_data, csv_path
+    return seq_data
 
 
-def save_feature(seq_data, file_path):
-    pickle.dumps(seq_data, file_path)
+def save_feature(seq_data, path):
+    file_path = os.path.join(path, 'sequence_with_imagefeature.pkl')
+    with open(file_path, 'wb') as file:
+        pickle.dump(seq_data, file)

@@ -1,7 +1,6 @@
 pip install -U pip
 apt-get install tmux
-pip install connected-components-3d
-pip install plyfile numba
+pip install connected-components-3d plyfile numba -i https://mirrors.aliyun.com/pypi/simple
 
 #export PATH=/usr/local/cuda-11.3/bin:$PATH
 #export LD_LIBRARY_PATH=/usr/local/cuda-11.3/lib64:$LD_LIBRARY_PATH
@@ -12,4 +11,3 @@ pip install plyfile numba
 #apt install libgl1-mesa-glx -y
 #cd /code || exit
 #cp /code/sh/sharded.py /usr/local/lib/python3.8/dist-packages/cloudvolume/datasource/precomputed/skeleton/sharded.py
-
