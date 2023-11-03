@@ -1446,3 +1446,28 @@ def connection_score_plot():
     fig.tight_layout()
     # 显示图像
     plt.show()
+
+
+def get_egde_network_f1():
+    file_name = f'/braindat/lab/liuyixiong/data/biologicalgraphs/tmp_output/SNEMI3D_test_pairs_info_1103.csv'
+    df = pd.read_csv(file_name)
+    N = len(df)
+    FP = 0
+    FN = 0
+    TP = 0
+    TN = 0
+    for ii in tqdm(range(0, N)):
+        label = df.iloc[ii, 5]
+        pred = df.iloc[ii, 4]
+        if label == 0 and pred == 0:
+            TN += 1
+        if label == 1 and pred == 0:
+            FN += 1
+        if label == 0 and pred == 1:
+            FP += 1
+        if label == 1 and pred == 1:
+            TP += 1
+    recall = TP/(TP+FN)
+    acc = TP/(TP+FP)
+    f1 = 2*recall*acc/(recall+acc)
+    print(recall,acc,f1)
