@@ -246,21 +246,21 @@ class Trainer(object):
                     distance_pos_list.append(distance_pos)
                     classification_list = classification_list + classification
                     rank_list = rank_list + rank
-                if self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET or self.cfg.DATASET.SNEMI3D_DATSET:
+                if self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET or (self.cfg.DATASET.SNEMI3D_DATSET and not self.cfg.DATASET.CONNECTOR_DATSET):
                     TP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 1))
                     TP_total = TP_total + TP
                     FP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 0))
                     FP_total = FP_total + FP
                     FN = sum(torch.logical_and(pred.detach().cpu() < 0.5, target[0] == 1))
                     FN_total = FN_total + FN
-        if not self.cfg.DATASET.CONNECTOR_DATSET:
+        if not self.cfg.DATASET.CONNECTOR_DATSET or self.cfg.DATASET.SNEMI3D_DATSET:
             name = 'volumetic'
         else:
             name = self.dataset_val.volume_sample.split('/')[-1]
         if hasattr(self, 'monitor'):
             self.monitor.logger.log_tb.add_scalar(
                 '%s_Validation_Loss' % name, val_loss, iter_total)
-            if not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET or self.cfg.DATASET.SNEMI3D_DATSET):
+            if not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET or (self.cfg.DATASET.SNEMI3D_DATSET and not self.cfg.DATASET.CONNECTOR_DATSET)):
                 self.monitor.visualize(volume, target, pred,
                                        weight, iter_total, suffix='Val')
             else:

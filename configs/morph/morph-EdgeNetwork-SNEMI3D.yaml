@@ -1,4 +1,7 @@
 # learn dense 3d image embedding with V-net
+SYSTEM:
+  NUM_GPUS: 1
+  NUM_CPUS: 2
 MODEL:
   INPUT_SIZE: [ 18, 52, 52 ]
   ARCHITECTURE: EdgeNetwork
@@ -18,7 +21,7 @@ SOLVER:
   LR_SCHEDULER_NAME: "MultiStepLR"
   NAME: AdamW
   ITERATION_RESTART: True
-  BASE_LR: 5e-04
+  BASE_LR: 2e-03
   STEPS: (30000, 60000)
   ITERATION_SAVE: 200
   ITERATION_TOTAL: 55000
@@ -36,7 +39,7 @@ DATASET:
   DO_MULTI_VOLUME: False
 INFERENCE:
   OUTPUT_ACT: ["none"]
-  SAMPLES_PER_BATCH: 4 # per gpu
+  SAMPLES_PER_BATCH: 64 # per gpu
 AUGMENTOR:
   SMOOTH: False
   MISSINGPARTS:

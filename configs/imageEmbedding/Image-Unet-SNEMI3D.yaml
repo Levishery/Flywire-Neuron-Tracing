@@ -1,0 +1,66 @@
+# learn dense 3d image embedding with V-net
+SYSTEM:
+  NUM_GPUS: 1
+  NUM_CPUS: 2
+MODEL:
+  INPUT_SIZE: [ 17, 129, 129 ]
+  OUTPUT_SIZE: [ 17, 129, 129 ]
+  ARCHITECTURE: unet_3d
+  BLOCK_TYPE: residual_se
+  FILTERS: [32, 64, 96, 128, 160]
+  OUT_PLANES: 16
+  TARGET_OPT: ["e"]
+  LOSS_OPTION:
+    [[ "DiscriminativeLoss", "ConnectionLoss" ]]
+  LOSS_WEIGHT: [[ 0.2, 1.0 ]]
+  WEIGHT_OPT: [[ "0", "0" ]]
+  OUTPUT_ACT: [[ "none",  "none" ]]
+MONITOR:
+  ITERATION_NUM: [20, 200]
+SOLVER:
+  LR_SCHEDULER_NAME: "MultiStepLR"
+  NAME: AdamW
+  ITERATION_RESTART: True
+  BASE_LR: 5e-04
+  STEPS: (30000, 60000)
+  ITERATION_SAVE: 200
+  ITERATION_TOTAL: 55000
+  ITERATION_VAL: 200
+  SAMPLES_PER_BATCH: 4 # PER GPU
+DATASET:
+  RELABEL: False
+  SNEMI3D_DATSET: True
+  CONNECTOR_DATSET: True
+  LABEL_NAME: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/training/SNEMI3D-train-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D.csv
+  VAL_LABEL_NAME: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D.csv
+  VAL_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/positives/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5
+  INPUT_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/training/positives/SNEMI3D-train-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/SNEMI3D-embed
+  DO_MULTI_VOLUME: False
+INFERENCE:
+  OUTPUT_ACT: ["none"]
+  SAMPLES_PER_BATCH: 4 # per gpu
+AUGMENTOR:
+  SMOOTH: False
+  MISSINGPARTS:
+    ENABLED: False
+  MISSINGSECTION:
+    ENABLED: False
+  CUTNOISE:
+    ENABLED: False
+  CUTBLUR:
+    ENABLED: False
+  ROTATE:
+    ENABLED: False
+  RESCALE:
+    ENABLED: False
+  FLIP:
+    ENABLED: True
+  ELASTIC:
+    ENABLED: False
+  GRAYSCALE:
+    ENABLED: True
+  MISALIGNMENT:
+    ENABLED: False
+  MOTIONBLUR:
+    ENABLED: False

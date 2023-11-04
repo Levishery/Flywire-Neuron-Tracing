@@ -53,6 +53,10 @@ class Snemi3dDataset(torch.utils.data.Dataset):
     background: int = 0  # background label index
 
     def __init__(self, sample_path, model_input_size, iter_num: int = -1, mode='train',
+                 target_opt: TARGET_OPT_TYPE = ['1'],
+                 weight_opt: WEIGHT_OPT_TYPE = [['1']],
+                 erosion_rates: Optional[List[int]] = None,
+                 dilation_rates: Optional[List[int]] = None,
                  augmentor: AUGMENTOR_TYPE = None, label_name=None, sample_volume_size=None, connector_dataset=False,
                  **kwargs):
 
@@ -60,11 +64,18 @@ class Snemi3dDataset(torch.utils.data.Dataset):
         self.mode = mode
         self.connector_dataset = connector_dataset
         if connector_dataset:
-            self.samples = readh5(sample_path)
-            self.connector_df = pd.read_csv(label_name)
-            self.total_samples = len(self.connector_df)
+            if self.mode != 'test':
+                self.segmentation = readh5(sample_path)
+                self.gt_labels = readh5(sample_path.replace('.h5', '-gt.h5'))
+                self.images = readh5(sample_path.replace('.h5', '-img.h5'))
+                self.total_samples = len(self.images)
+                self.connector_df = pd.read_csv(label_name)[:self.total_samples]
+            else:
+                self.images = readh5(sample_path.replace('.h5', '-img.h5'))
+                self.segmentation = readh5(sample_path)
+                self.connector_df = pd.read_csv(label_name)
             self.iter_num = 200 * max(
-                iter_num, len(self.connector_df)) if self.mode == 'train' else len(self.connector_df)
+                iter_num, len(self.images)) if self.mode == 'train' else len(self.images)
             print('Total number of samples to be generated: ', self.iter_num)
         else:
             self.pos_samples = readh5(sample_path.split('#')[0])
@@ -84,7 +95,6 @@ class Snemi3dDataset(torch.utils.data.Dataset):
         else:
             self.augmentor = augmentor
 
-
         # dataset: channels, depths, rows, cols
         # volume size, could be multi-volume input
         self.model_input_size = model_input_size
@@ -93,7 +103,18 @@ class Snemi3dDataset(torch.utils.data.Dataset):
         self.alpha_neg = 5
         self.alpha_offset = 20
         self.neg_point_num = 300
+        self.data_mean = 0.5
+        self.data_std = 0.5
 
+        # target and weight options
+        self.target_opt = target_opt
+        self.weight_opt = weight_opt
+        # For 'all', users will create their own targets
+        if self.target_opt[-1] == 'all':
+            self.target_opt = self.target_opt[:-1]
+            self.weight_opt = self.weight_opt[:-1]
+        self.erosion_rates = erosion_rates
+        self.dilation_rates = dilation_rates
         # For relatively small volumes, the total number of samples can be generated is smaller
         # than the number of samples required for training (i.e., iteration * batch size). Thus
         # we let the __len__() of the dataset return the larger value among the two during training.
@@ -108,123 +129,82 @@ class Snemi3dDataset(torch.utils.data.Dataset):
         if self.connector_dataset:
             if self.mode == 'train':
                 # random sample during training
-                idx = random.randint(0, len(self.connector_df) - 1)
-                connector = self.connector_df[idx]
-                pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample(connector)
+                idx = random.randint(0, self.total_samples - 1)
+                pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample(idx)
                 return pos_data, out_volume, out_target, out_weight
 
             elif self.mode == 'val':
-                connector = self.connector_df[index]
-                pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample_vali(connector)
+                pos_data, out_volume, out_target, out_weight = self._connector_to_target_sample(index)
                 return pos_data, out_volume, out_target, out_weight
 
             elif self.mode == 'test':
-                connector = self.connector_df[index]
-                return self._connector_to_target_sample_test(connector)
+                return self._connector_to_target_sample_test(index)
         else:
             if self.mode == 'train':
-                idx = random.randint(0, self.total_samples - 1)
-                pos_data, out_volume, out_target, out_weight = self._get_morph_sample(idx)
+                if random.random() > 0.4:
+                    idx = random.randint(0, self.total_pos_samples - 1)
+                    pos_data, out_volume, out_target, out_weight = self._get_morph_sample(idx)
+                else:
+                    idx = random.randint(self.total_pos_samples, self.total_samples - 1)
+                    pos_data, out_volume, out_target, out_weight = self._get_morph_sample(idx)
                 return pos_data, out_volume, out_target, out_weight
             elif self.mode == 'val':
                 pos_data, out_volume, out_target, out_weight = self._get_morph_sample(index)
                 return pos_data, out_volume, out_target, out_weight
 
+    def sample_from_normal3d(self, sigma_z, sigma_xy, point_num):
+        # print(np.asarray([np.random.normal(0, sigma_z, point_num),
+        #                        np.random.normal(0, sigma_xy, point_num),
+        #                        np.random.normal(0, sigma_xy, point_num)]))
+        return np.asarray([np.random.normal(0, sigma_z, point_num),
+                           np.random.normal(0, sigma_xy, point_num),
+                           np.random.normal(0, sigma_xy, point_num)])
 
-    def _connector_to_target_sample(self, connector):
-        samples = pd.read_csv(connector, header=None)
-        # positive
-        if random.random() > 0.7:
-            idx = 0
-        else:
-            if len(samples)>1:
-                idx = random.randint(1,len(samples)-1)
-            else:
-                idx = 0
-        id0 = samples[0][idx]
-        id1 = samples[1][idx]
-        file_name = str(id0) + '_' + str(id1) + '.h5'
-        target = samples[3][idx]
-        volume = readh5(os.path.join(self.label_name, file_name))
-        if random.random() < 0.33:
-            volume = np.transpose(volume, [1,0,2])
-        elif random.random() > 0.66:
-            volume = np.transpose(volume, [2,0,1])
-        # crop and resize
-        z_width = int(self.sample_volume_size[0]*400/128)
-        out_label = crop_volume(volume, [z_width, self.sample_volume_size[1], self.sample_volume_size[2]], [(volume.shape[0]-z_width)/2,0,0])
-        out_label = resize(out_label, self.sample_volume_size, order=0, mode='constant', cval=0, clip=True, preserve_range=True,
-                              anti_aliasing=False)
-        data = {'image': out_label,
-                'label': out_label,
-                'valid_mask': out_label}
-        augmented = self.augmentor(data)
-        label = augmented['label']
-        seg_0_morph = np.expand_dims(np.array(label == 1), 0)
-        seg_1_morph = np.expand_dims(np.array(label == 2), 0)
-        seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
-        if random.random() > 0.5:
-            out_volume = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
-                                     seg_combined_morph.astype(np.float32)))
-        else:
-            out_volume = np.concatenate((seg_1_morph.astype(np.float32), seg_0_morph.astype(np.float32),
-                                         seg_combined_morph.astype(np.float32)))
-        return [0, 0, 0, 0], out_volume, [[target]], [[np.asarray([0])]]
+    def _connector_to_target_sample(self, idx):
 
-    def _connector_to_target_sample_vali(self, connector):
-        # positive
-        id0 = connector[0]
-        id1 = connector[1]
-        file_name = str(id0) + '_' + str(id1) + '.h5'
-        target = connector[3]
-        volume = readh5(os.path.join(self.label_name, file_name))
-        if self.test_axis == 1:
-            volume = np.transpose(volume, [1,0,2])
-        elif self.test_axis == 2:
-            volume = np.transpose(volume, [2,0,1])
-        # crop and resize
-        z_width = int(self.sample_volume_size[0] * 400 / 128)
-        out_label = crop_volume(volume, [z_width, self.sample_volume_size[1], self.sample_volume_size[2]],
-                                [(volume.shape[0] - z_width) / 2, 0, 0])
-        out_label = resize(out_label, self.sample_volume_size, order=0, mode='constant', cval=0, clip=True, preserve_range=True,
-                              anti_aliasing=False)
-        seg_0_morph = np.expand_dims(np.array(out_label == 1), 0)
-        seg_1_morph = np.expand_dims(np.array(out_label == 2), 0)
-        seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
-        out_volume = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
-                                     seg_combined_morph.astype(np.float32)))
-        return [0, 0, 0, 0], out_volume, [[target]], [[np.asarray([0])]]
+        out_label = self.segmentation[idx, :, :, :]
+        out_gt = self.gt_labels[idx, :, :, :]
+        out_volume = self.images[idx, :, :, :].astype(np.float32)
+        [seg_positive, seg_start] = [self.connector_df['label_one'][idx], self.connector_df['label_two'][idx]]
+        assert seg_start in np.unique(out_label) and seg_positive in np.unique(out_label)
+        seg_target_relabeled = [seg_start, seg_positive]
+        neg_cord_offset = self.sample_from_normal3d(self.model_input_size[0] / self.alpha_neg,
+                                                    self.model_input_size[1] / self.alpha_neg, self.neg_point_num)
+        neg_cord_offset = np.asarray(
+            [np.clip(neg_cord_offset[0], - self.model_input_size[0] / 2, self.model_input_size[0] / 2 - 1),
+             np.clip(neg_cord_offset[1], - self.model_input_size[1] / 2, self.model_input_size[1] / 2 - 1),
+             np.clip(neg_cord_offset[2], - self.model_input_size[2] / 2, self.model_input_size[2] / 2 - 1)])
+        neg_cord_pos = neg_cord_offset + np.transpose(np.asarray([np.asarray(self.model_input_size) / 2]))
+        neg_cord_pos = list(neg_cord_pos.astype(np.int32))
 
-    def _connector_to_target_sample_test(self, connector):
-        # positive
-        id0 = connector[0]
-        id1 = connector[1]
-        file_name = str(id0) + '_' + str(id1) + '.h5'
-        target = connector[3]
-        volume = readh5(os.path.join(self.label_name, file_name))
-        if self.test_axis == 1:
-            volume = np.transpose(volume, [1,0,2])
-        elif self.test_axis == 2:
-            volume = np.transpose(volume, [2,0,1])
-        # crop and resize
-        z_width = int(self.sample_volume_size[0] * 400 / 128)
-        out_label = crop_volume(volume, [z_width, self.sample_volume_size[1], self.sample_volume_size[2]],
-                                [(volume.shape[0] - z_width) / 2, 0, 0])
-        out_label = resize(out_label, self.sample_volume_size, order=0, mode='constant', cval=0, clip=True, preserve_range=True,
-                              anti_aliasing=False)
-        seg_0_morph = np.expand_dims(np.array(out_label == 1), 0)
-        seg_1_morph = np.expand_dims(np.array(out_label == 2), 0)
-        seg_combined_morph = np.logical_or(seg_1_morph, seg_0_morph)
-        out_volume = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
-                                     seg_combined_morph.astype(np.float32)))
-        return [0, 0, 0, 0], out_volume, out_label, [[target]], [id0, id1]
+        seg_negative = np.setdiff1d(np.asarray(np.unique(out_label[neg_cord_pos[0], neg_cord_pos[1], neg_cord_pos[2]])),
+                                    [0, seg_positive, seg_start])
+        np.random.shuffle(seg_negative)
+        # fixed number of seg_negative
+        seg_negative = seg_negative[:20]
+
+        pos_data = {'pos': [0, 0, 0, 0],
+                    'seg_start': seg_start,
+                    'seg_positive': seg_positive,
+                    'seg_target_relabeled': seg_target_relabeled,
+                    'seg_negative': seg_negative}
+        out_target = seg_to_targets(
+            out_label, self.target_opt, self.erosion_rates, self.dilation_rates, segment_info=pos_data)
+        out_weight = seg_to_weights(out_target, self.weight_opt, None, out_label)
+        out_volume = np.expand_dims(out_volume, 0)
+        out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
+
+        return pos_data, out_volume, out_target, out_weight
+
+    def _connector_to_target_sample_test(self, index):
+        return 0,0,0,0
 
     def _get_morph_sample(self, idx):
         if idx < self.total_pos_samples:
             out_label = self.pos_samples[idx, :, :, :]
             target = 1
         else:
-            out_label = self.neg_samples[idx-self.total_pos_samples, :, :, :]
+            out_label = self.neg_samples[idx - self.total_pos_samples, :, :, :]
             target = 0
         seg_0_morph = np.expand_dims(np.array(out_label == 1), 0)
         seg_1_morph = np.expand_dims(np.array(out_label == 2), 0)
@@ -232,4 +212,3 @@ class Snemi3dDataset(torch.utils.data.Dataset):
         out_volume = np.concatenate((seg_0_morph.astype(np.float32), seg_1_morph.astype(np.float32),
                                      seg_combined_morph.astype(np.float32)))
         return [0, 0, 0, 0], out_volume, [[target]], [[np.asarray([0])]]
-
