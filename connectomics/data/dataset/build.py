@@ -15,6 +15,7 @@ from .dataset_volume import VolumeDataset
 from .dataset_multivolume import MultiVolumeDataset
 from .dataset_connector import ConnectorDataset
 from .dataset_biological import BiologicalDataset
+from .dataset_snemi3d import Snemi3dDataset
 from .dataset_tile import TileDataset
 from .collate import *
 from ..utils import *
@@ -297,6 +298,14 @@ def get_dataset(cfg,
         else:
             dir_name = _get_file_list(cfg.DATASET.INPUT_PATH)
             dataset = BiologicalDataset(dir_name, label_name=cfg.DATASET.LABEL_NAME, **shared_kwargs)
+
+    elif cfg.DATASET.SNEMI3D_DATSET:
+        if mode == 'val':
+            dataset = Snemi3dDataset(cfg.DATASET.VAL_PATH, label_name=cfg.DATASET.VAL_LABEL_NAME, **shared_kwargs)
+        elif mode == 'test':
+            dataset = Snemi3dDataset(cfg.INFERENCE.INPUT_PATH, label_name=cfg.INFERENCE.IMAGE_NAME, **shared_kwargs)
+        else:
+            dataset = Snemi3dDataset(cfg.DATASET.INPUT_PATH, label_name=cfg.DATASET.LABEL_NAME, **shared_kwargs)
     else:  # build VolumeDataset
         volume, label, valid_mask = _get_input(
             cfg, mode, rank, dir_name_init, img_name_init)

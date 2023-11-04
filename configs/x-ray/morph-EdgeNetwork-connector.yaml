@@ -29,6 +29,7 @@ SOLVER:
 DATASET:
   RELABEL: False
   BIOLOGICAL_DATSET: True
+  DATASET_NAME: XRAY
   LABEL_NAME: /braindat/lab/liusl/x-ray/train_candidates_1500nm
   VAL_LABEL_NAME: /braindat/lab/liusl/x-ray/validation_candidates_1500nm
   VAL_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/xray-validation-downsamplesamples.csv

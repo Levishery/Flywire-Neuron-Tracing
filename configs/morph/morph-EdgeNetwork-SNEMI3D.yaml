@@ -1,0 +1,63 @@
+# learn dense 3d image embedding with V-net
+MODEL:
+  INPUT_SIZE: [ 18, 52, 52 ]
+  ARCHITECTURE: EdgeNetwork
+  POOLING_LAYER: True  # used in unet
+  IN_PLANES: 3
+  FILTERS: [16, 32, 64]
+  LOSS_OPTION:
+    [[ "classification_MSE" ]]
+  LOSS_WEIGHT: [[ 1.0 ]]
+  WEIGHT_OPT: [[ "0" ]]
+  OUTPUT_ACT: [[ "none"]]
+  TARGET_OPT: ["0"]
+  MIXED_PRECESION: True
+MONITOR:
+  ITERATION_NUM: [20, 200000]
+SOLVER:
+  LR_SCHEDULER_NAME: "MultiStepLR"
+  NAME: AdamW
+  ITERATION_RESTART: True
+  BASE_LR: 5e-04
+  STEPS: (30000, 60000)
+  ITERATION_SAVE: 200
+  ITERATION_TOTAL: 55000
+  ITERATION_VAL: 200
+  SAMPLES_PER_BATCH: 64 # PER GPU
+DATASET:
+  RELABEL: False
+  SNEMI3D_DATSET: True
+  CONNECTOR_DATSET: False
+  LABEL_NAME:
+  VAL_LABEL_NAME:
+  VAL_PATH: /braindat/lab/liuyixiong/data/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-600nm-18x52x52/testing/positives/SNEMI3D-test-segmentation-wos-reduced-nodes-400nm-3x20x60x60-SNEMI3D-examples.h5#/braindat/lab/liuyixiong/data/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-600nm-18x52x52/testing/negatives/SNEMI3D-test-segmentation-wos-reduced-nodes-400nm-3x20x60x60-SNEMI3D-examples.h5
+  INPUT_PATH: /braindat/lab/liuyixiong/data/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-600nm-18x52x52/training/positives/SNEMI3D-train-segmentation-wos-reduced-nodes-400nm-3x20x60x60-SNEMI3D-examples.h5#/braindat/lab/liuyixiong/data/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-600nm-18x52x52/training/negatives/SNEMI3D-train-segmentation-wos-reduced-nodes-400nm-3x20x60x60-SNEMI3D-examples.h5
+  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/SNEMI3D
+  DO_MULTI_VOLUME: False
+INFERENCE:
+  OUTPUT_ACT: ["none"]
+  SAMPLES_PER_BATCH: 4 # per gpu
+AUGMENTOR:
+  SMOOTH: False
+  MISSINGPARTS:
+    ENABLED: False
+  MISSINGSECTION:
+    ENABLED: False
+  CUTNOISE:
+    ENABLED: False
+  CUTBLUR:
+    ENABLED: False
+  ROTATE:
+    ENABLED: False
+  RESCALE:
+    ENABLED: False
+  FLIP:
+    ENABLED: True
+  ELASTIC:
+    ENABLED: False
+  GRAYSCALE:
+    ENABLED: False
+  MISALIGNMENT:
+    ENABLED: False
+  MOTIONBLUR:
+    ENABLED: False

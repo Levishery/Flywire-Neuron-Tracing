@@ -1,5 +1,7 @@
 # learn dense 3d image embedding with V-net
 MODEL:
+  INPUT_SIZE: [ 17, 129, 129 ]
+  OUTPUT_SIZE: [ 17, 129, 129 ]
   ARCHITECTURE: unet_3d
   BLOCK_TYPE: residual_se
   FILTERS: [32, 64, 96, 128, 160]
@@ -9,16 +11,59 @@ MODEL:
   LOSS_WEIGHT: [ [ 1.0 ] ]
   WEIGHT_OPT: [ [ "0" ] ]
   OUTPUT_ACT: [[ "none" ]]
+  ISOTROPY: [ False, True, True, True, True]
 MONITOR:
   ITERATION_NUM: [20, 200]
+SOLVER:
+  LR_SCHEDULER_NAME: "WarmupMultiStepLR"
+  BASE_LR: 2e-3
+  SAMPLES_PER_BATCH: 2
+  NAME: "AdamW"
+  MOMENTUM: 0.9
+  ITERATION_SAVE: 1000 # check memory
+  ITERATION_VAL: 500
+  STEPS: (450000, 500000)
+  WARMUP_FACTOR: 2e-4
+  WARMUP_ITERS: 500
+  ITERATION_TOTAL: 250000
+  # ITERATION_RESTART: True
 DATASET:
-  IMAGE_NAME: im_Atrain.h5@im_Btrain.h5@im_Ctrain.h5
-  LABEL_NAME: neuron_A_train.h5@neuron_B_train.h5@neuron_C_train.h5
-  VAL_IMAGE_NAME: im_Aval.h5@im_Bval.h5@im_Cval.h5
-  VAL_LABEL_NAME: neuron_A_val.h5@neuron_B_val.h5@neuron_C_val.h5
-  INPUT_PATH: /braindat/lab/liusl/cremi/train_93-32_vali
+  IMAGE_NAME: mip2_im_A_train.h5@mip2_im_B_train.h5@mip2_im_C_train.h5
+  LABEL_NAME: mip2_neuron_A_train.h5@mip2_neuron_B_train.h5@mip2_neuron_C_train.h5
+  VAL_IMAGE_NAME: mip2_im_A_val.h5@mip2_im_B_val.h5@mip2_im_C_val.h5
+  VAL_LABEL_NAME: mip2_neuron_A_val.h5@mip2_neuron_B_val.h5@mip2_neuron_C_val.h5
+  INPUT_PATH: /braindat/lab/liusl/connectomic_dataset/cremi/train_93-32_vali
   OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/image-Unet-metric-only
 INFERENCE:
   OUTPUT_PATH: /data12T/janechen/SNEMI_UNet/test
   OUTPUT_NAME: result.h5
   OUTPUT_ACT: [ "none"]
+AUGMENTOR:
+  SMOOTH: False
+  MISSINGPARTS:
+    ENABLED: False
+    P: 0.3
+  MISSINGSECTION:
+    ENABLED: False
+    P: 0.3
+  CUTNOISE:
+    ENABLED: False
+  CUTBLUR:
+    ENABLED: False
+  ROTATE:
+    ENABLED: True
+  RESCALE:
+    ENABLED: True
+  FLIP:
+    ENABLED: True
+  ELASTIC:
+    ENABLED: False
+  GRAYSCALE:
+    ENABLED: True
+  MISALIGNMENT:
+    DISPLACEMENT: 32
+    P: 0.3
+    ENABLED: False
+    ROTATE_RATIO: 0.0
+  MOTIONBLUR:
+    ENABLED: False

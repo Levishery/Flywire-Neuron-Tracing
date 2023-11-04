@@ -107,7 +107,7 @@ class Trainer(object):
             self.dataloader = build_dataloader(
                 self.cfg, self.augmentor, self.mode, rank=rank)
             self.dataloader = iter(self.dataloader)
-            if self.mode == 'train' and cfg.DATASET.VAL_LABEL_NAME is not None:
+            if self.mode == 'train' and cfg.DATASET.VAL_PATH is not None:
                 self.val_loader = build_dataloader(
                     self.cfg, None, mode='val', rank=rank)
         if self.cfg.DATASET.MORPHOLOGY_DATSET and self.cfg.MODEL.IN_PLANES > 4:
@@ -246,21 +246,21 @@ class Trainer(object):
                     distance_pos_list.append(distance_pos)
                     classification_list = classification_list + classification
                     rank_list = rank_list + rank
-                if self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET:
+                if self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET or self.cfg.DATASET.SNEMI3D_DATSET:
                     TP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 1))
                     TP_total = TP_total + TP
                     FP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 0))
                     FP_total = FP_total + FP
                     FN = sum(torch.logical_and(pred.detach().cpu() < 0.5, target[0] == 1))
                     FN_total = FN_total + FN
-        if self.cfg.DATASET.BIOLOGICAL_DATSET:
-            name = 'biological'
+        if not self.cfg.DATASET.CONNECTOR_DATSET:
+            name = 'volumetic'
         else:
             name = self.dataset_val.volume_sample.split('/')[-1]
         if hasattr(self, 'monitor'):
             self.monitor.logger.log_tb.add_scalar(
                 '%s_Validation_Loss' % name, val_loss, iter_total)
-            if not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET):
+            if not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET or self.cfg.DATASET.SNEMI3D_DATSET):
                 self.monitor.visualize(volume, target, pred,
                                        weight, iter_total, suffix='Val')
             else:

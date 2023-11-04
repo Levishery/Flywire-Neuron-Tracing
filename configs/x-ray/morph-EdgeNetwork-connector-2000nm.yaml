@@ -28,6 +28,7 @@ SOLVER:
   SAMPLES_PER_BATCH: 4 # PER GPU
 DATASET:
   RELABEL: False
+  DATASET_NAME: XRAY
   BIOLOGICAL_DATSET: True
   LABEL_NAME: /braindat/lab/liusl/x-ray/train_candidates_2000nm
   VAL_LABEL_NAME: /braindat/lab/liusl/x-ray/validation_candidates_2000nm
