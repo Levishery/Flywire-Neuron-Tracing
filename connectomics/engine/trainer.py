@@ -107,7 +107,7 @@ class Trainer(object):
             self.dataloader = build_dataloader(
                 self.cfg, self.augmentor, self.mode, rank=rank)
             self.dataloader = iter(self.dataloader)
-            if self.mode == 'train' and cfg.DATASET.VAL_PATH is not None:
+            if self.mode == 'train' and (cfg.DATASET.VAL_PATH is not None or cfg.DATASET.VAL_LABEL_NAME is not None):
                 self.val_loader = build_dataloader(
                     self.cfg, None, mode='val', rank=rank)
         if self.cfg.DATASET.MORPHOLOGY_DATSET and self.cfg.MODEL.IN_PLANES > 4:
@@ -320,7 +320,7 @@ class Trainer(object):
                 pos, volume, ffn_label, seg_start, candidates = sample.pos, sample.out_input, sample.ffn_label, sample.seg_start, sample.candidates
                 volume = volume.to(self.device, non_blocking=True)
                 output = self.augmentor(self.model, volume)
-                ranking = get_connection_ranking(output, ffn_label, seg_start, candidates)
+
 
                 if torch.cuda.is_available() and i % 50 == 0:
                     GPUtil.showUtilization(all=True)
@@ -361,7 +361,7 @@ class Trainer(object):
         return pred
 
     def test_embededge(self, visualize_csv_path=None):
-        r"""Inference function of the trainer class.
+        r"""Inference block precision and recalls for EdgeNetworks.
         """
         self.model.eval() if self.cfg.INFERENCE.DO_EVAL else self.model.train()
         print("Total number of batches: ", len(self.dataloader))
@@ -380,15 +380,15 @@ class Trainer(object):
                 ids = sample.candidates
                 volume, embedding = self.get_morph_input(volume)
                 # make prediction using segment embedding distance only
-                pred = self.get_prediction_from_distance(volume)
+                #pred = self.get_prediction_from_distance(volume)
                 # visualize(volume, sample.out_input, index=22, mask=True)
                 # prediction
-                # with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
-                #     if self.cfg.MODEL.EMBED_REDUCTION is None:
-                #         volume = volume.contiguous().to(self.device, non_blocking=True)
-                #         pred = self.model(volume)
-                #     else:
-                #         pred = self.model(volume, embedding)
+                with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
+                    if self.cfg.MODEL.EMBED_REDUCTION is None:
+                        volume = volume.contiguous().to(self.device, non_blocking=True)
+                        pred = self.model(volume)
+                    else:
+                        pred = self.model(volume, embedding)
                 pred_record = pred.detach().cpu()
                 TP = sum(torch.logical_and(pred_record > 0.5, target == 1))
                 TP_total = TP_total + TP
@@ -450,7 +450,8 @@ class Trainer(object):
             self.test()
 
     def get_pc_feature_test(self, mode: str, rank=None):
-        r"""get point cloud point image features.
+        r""" For real tracing experiment. Candidate pairs extracted through biological.
+        get point cloud point image features.
         """
         self.dataset = get_dataset(self.cfg, self.augmentor, mode, rank=rank)
         num_chunk = len(self.dataset.volume_path)
@@ -542,7 +543,8 @@ class Trainer(object):
         return
 
     def get_pc_feature_gpt(self, mode: str, rank=None, n_point=8):
-        r"""get point cloud point image features.
+        r"""Get image embeddings for Tracing Transformer.
+        get point cloud point image features.
         """
         self.dataset = get_dataset(self.cfg, self.augmentor, mode, rank=rank)
         num_chunk = len(self.dataset.volume_path)
@@ -724,7 +726,8 @@ class Trainer(object):
         return
 
     def test_patch(self, mode: str, rank=None):
-        r"""Get test patch from h5 files, compute and save image embedding with point location
+        r"""
+        Get test patch from h5 files, compute and save image embedding with point location
         input: point clouds
         output: point clouds with image embeddings
         """
@@ -943,42 +946,8 @@ class Trainer(object):
             self.lr_scheduler.step()
 
     # -----------------------------------------------------------------------------
-    # Chunk processing for TileDataset
+    # Block processing for MultiVolumeDataset
     # -----------------------------------------------------------------------------
-    def run_chunk(self, mode: str):
-        r"""Run chunk-based training and inference for large-scale datasets.
-        """
-        self.dataset = get_dataset(self.cfg, self.augmentor, mode)
-        if mode == 'train':
-            num_chunk = self.total_iter_nums // self.cfg.DATASET.DATA_CHUNK_ITER
-            self.total_iter_nums = self.cfg.DATASET.DATA_CHUNK_ITER
-            for chunk in range(num_chunk):
-                self.dataset.updatechunk()
-                self.dataloader = build_dataloader(self.cfg, self.augmentor, mode,
-                                                   dataset=self.dataset.dataset)
-                self.dataloader = iter(self.dataloader)
-                print('start train for chunk %d' % chunk)
-                self.train()
-                print('finished train for chunk %d' % chunk)
-                self.start_iter += self.cfg.DATASET.DATA_CHUNK_ITER
-                del self.dataloader
-            return
-
-        # inference mode
-        num_chunk = len(self.dataset.chunk_ind)
-        print("Total number of chunks: ", num_chunk)
-        for chunk in range(num_chunk):
-            self.dataset.updatechunk(do_load=False)
-            self.test_filename = self.cfg.INFERENCE.OUTPUT_NAME + \
-                                 '_' + self.dataset.get_coord_name() + '.h5'
-            self.test_filename = self.augmentor.update_name(
-                self.test_filename)
-            if not os.path.exists(os.path.join(self.output_dir, self.test_filename)):
-                self.dataset.loadchunk()
-                self.dataloader = build_dataloader(self.cfg, self.augmentor, mode,
-                                                   dataset=self.dataset.dataset)
-                self.dataloader = iter(self.dataloader)
-                self.test()
 
     def run_multivolume(self, mode: str, rank=None):
         r"""Run multi volume training for mixed datasets.
