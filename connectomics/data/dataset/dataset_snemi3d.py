@@ -71,9 +71,15 @@ class Snemi3dDataset(torch.utils.data.Dataset):
                 self.total_samples = len(self.images)
                 self.connector_df = pd.read_csv(label_name)[:self.total_samples]
             else:
-                self.images = readh5(sample_path.replace('.h5', '-img.h5'))
-                self.segmentation = readh5(sample_path)
+                self.pos_segmentation = readh5(sample_path.split('#')[0])
+                self.neg_segmentation = readh5(sample_path.split('#')[1])
+                self.total_samples = len(self.pos_segmentation) + len(self.neg_segmentation)
+                self.pos_images = readh5(sample_path.replace('.h5', '-img.h5').split('#')[0])
+                self.neg_images = readh5(sample_path.replace('.h5', '-img.h5').split('#')[1])
+                self.segmentation = np.concatenate((self.pos_segmentation, self.neg_segmentation), axis=0)
+                self.images = np.concatenate((self.pos_images, self.neg_images), axis=0)
                 self.connector_df = pd.read_csv(label_name)
+                assert len(self.connector_df) == self.total_samples
             self.iter_num = 200 * max(
                 iter_num, len(self.images)) if self.mode == 'train' else len(self.images)
             print('Total number of samples to be generated: ', self.iter_num)
@@ -196,8 +202,19 @@ class Snemi3dDataset(torch.utils.data.Dataset):
 
         return pos_data, out_volume, out_target, out_weight
 
-    def _connector_to_target_sample_test(self, index):
-        return 0,0,0,0
+    def _connector_to_target_sample_test(self, idx):
+        out_label = self.segmentation[idx, :, :, :]
+        out_volume = self.images[idx, :, :, :].astype(np.float32)
+        [seg_candidate, seg_start] = [self.connector_df['label_one'][idx], self.connector_df['label_two'][idx]]
+        assert seg_start in np.unique(out_label) and seg_candidate in np.unique(out_label)
+
+        pos_data = {'pos': [0, 0, 0, 0],
+                    'seg_start': seg_start,
+                    'seg_candidate': seg_candidate}
+        out_volume = np.expand_dims(out_volume, 0)
+        out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
+
+        return pos_data, out_volume, out_label, [[np.asarray([0])]], [[np.asarray([0])]]
 
     def _get_morph_sample(self, idx):
         if idx < self.total_pos_samples:

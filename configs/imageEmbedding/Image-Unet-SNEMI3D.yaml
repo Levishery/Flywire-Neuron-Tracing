@@ -21,7 +21,7 @@ SOLVER:
   LR_SCHEDULER_NAME: "MultiStepLR"
   NAME: AdamW
   ITERATION_RESTART: True
-  BASE_LR: 5e-04
+  BASE_LR: 2e-04
   STEPS: (30000, 60000)
   ITERATION_SAVE: 200
   ITERATION_TOTAL: 55000
@@ -40,6 +40,9 @@ DATASET:
 INFERENCE:
   OUTPUT_ACT: ["none"]
   SAMPLES_PER_BATCH: 4 # per gpu
+  INPUT_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/positives/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5#/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/negatives/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5
+  OUTPUT_PATH: /braindat/lab/liusl/aaai24/snemi3d/image_feature_patch/connect-embed
+  IMAGE_NAME: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D.csv
 AUGMENTOR:
   SMOOTH: False
   MISSINGPARTS:

@@ -34,7 +34,7 @@ from ..data.augmentation import build_train_augmentor, TestAugmentor
 from ..data.dataset import build_dataloader, get_dataset, ConnectorDataset, PatchDataset
 from ..data.dataset.build import _get_file_list, _make_path_list
 from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking, pca_emb, \
-    readh5, save_feature
+    readh5, save_feature, get_prediction_from_distance
 from ..data.utils import get_padsize, array_unpad, readvol, patch_rand_drop, stat_biological_recall, select_points, \
     get_crop_index
 
@@ -306,7 +306,7 @@ class Trainer(object):
         self.model.train()
 
     def test(self):
-        r"""Inference function of the trainer class.
+        r"""Inference every patch and save the result.
         """
         self.model.eval() if self.cfg.INFERENCE.DO_EVAL else self.model.train()
         print("Total number of batches: ", len(self.dataloader))
@@ -317,11 +317,12 @@ class Trainer(object):
                 print('progress: %d/%d batches, total time %.2fs' %
                       (i + 1, len(self.dataloader), time.perf_counter() - start))
 
-                pos, volume, ffn_label, seg_start, candidates = sample.pos, sample.out_input, sample.ffn_label, sample.seg_start, sample.candidates
+                pos, volume, segmentation = sample.pos, sample.out_input, sample.ffn_label
                 volume = volume.to(self.device, non_blocking=True)
                 output = self.augmentor(self.model, volume)
-
-
+                for idx in range(len(pos)):
+                    save = np.concatenate((output[idx, :, :, :, :], np.expand_dims(segmentation[idx].astype(np.float32), axis=0),), axis=0)
+                    writeh5(os.path.join(self.cfg.DATASET.OUTPUT_PATH, str(pos[idx]['seg_start']) + '_' + str(pos[idx]['seg_candidate']) + '.h5'), save)
                 if torch.cuda.is_available() and i % 50 == 0:
                     GPUtil.showUtilization(all=True)
 
@@ -345,20 +346,6 @@ class Trainer(object):
 
         end = time.perf_counter()
         print("Prediction time: %.2fs" % (end - start))
-
-    def get_prediction_from_distance(self, volume):
-        pred = torch.zeros([volume.shape[0], 1])
-        for i in range(volume.shape[0]):
-            query_mask = volume[i, 0, :, :, :] > 0
-            candidate_mask = volume[i, 1, :, :, :] > 0
-            embedding = volume[i, 3:, :, :, :]
-            embedding_query = embedding[:, query_mask]
-            mean_query = torch.mean(embedding_query, dim=1)
-            embedding_candidate = embedding[:, candidate_mask]
-            mean_candidate = torch.mean(embedding_candidate, dim=1)
-            distance = torch.norm(mean_query - mean_candidate)
-            pred[i, 0] = int(distance < self.cfg.SOLVER.BASE_LR)
-        return pred
 
     def test_embededge(self, visualize_csv_path=None):
         r"""Inference block precision and recalls for EdgeNetworks.

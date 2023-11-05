@@ -136,3 +136,18 @@ def get_connection_ranking(pred, ffn_label, seg_start, candidates):
         distance_dict = {k: v for k, v in sorted(distance_dict.items(), key=lambda item: item[1])}
         # if seg_start_b == 9835396981 or seg_start_b == 8792571643:
         print('distance_dict: ', distance_dict)
+
+
+def get_prediction_from_distance(self, volume):
+    pred = torch.zeros([volume.shape[0], 1])
+    for i in range(volume.shape[0]):
+        query_mask = volume[i, 0, :, :, :] > 0
+        candidate_mask = volume[i, 1, :, :, :] > 0
+        embedding = volume[i, 3:, :, :, :]
+        embedding_query = embedding[:, query_mask]
+        mean_query = torch.mean(embedding_query, dim=1)
+        embedding_candidate = embedding[:, candidate_mask]
+        mean_candidate = torch.mean(embedding_candidate, dim=1)
+        distance = torch.norm(mean_query - mean_candidate)
+        pred[i, 0] = int(distance < self.cfg.SOLVER.BASE_LR)
+    return pred
