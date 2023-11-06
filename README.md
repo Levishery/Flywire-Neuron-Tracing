@@ -12,3 +12,5 @@ testing -- raw image, initial over-segmentation
 3. Fintune the image embedding model and run inference on the test set [config](https://github.com/Levishery/flywire_NeuronRec/blob/main/configs/imageEmbedding/Image-Unet-SNEMI3D.yaml);
 4. Map the computed embedding to the point cloud [map_pc_snemi3d.py](https://github.com/Levishery/flywire_NeuronRec/blob/main/dataset/snemi3d/map_pc_snemi3d.py);
 5. Finetune the Pointnet++ and infer
+
+TODO: merge step 3 and 4
