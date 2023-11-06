@@ -112,11 +112,11 @@ def check_boundary(x, y, z, shape):
     return is_x_bound or is_y_bound or is_z_bound
 
 
-def write_ply(point, ids, filename):
+def write_ply(point, ids, filename, npoint):
     file = open(filename, 'w')
     file.writelines("ply\n")
     file.writelines("format ascii 1.0\n")
-    file.writelines("element vertex " + str(1024) + "\n")
+    file.writelines("element vertex " + str(npoint) + "\n")
     file.writelines("property float x\n")
     file.writelines("property float y\n")
     file.writelines("property float z\n")
@@ -161,6 +161,7 @@ if __name__ == '__main__':
         ly = 160
         lz = 32
         step = 1
+        npoint = 2048
         device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 
         df = pd.read_csv(file_name)
@@ -317,8 +318,8 @@ if __name__ == '__main__':
             ids = PlyData.read(filename_pcd).elements[0].data['id']
             if len(np.unique(ids) > 1):
                 pcd_tensor = torch.tensor(pcd, dtype=torch.long).unsqueeze(dim=0).to(device)
-                pcd_down_index = farthest_point_sample(pcd_tensor, N)
+                pcd_down_index = farthest_point_sample(pcd_tensor, npoint)
                 pcd_down = index_points(pcd_tensor, pcd_down_index)
                 pcd_out = pcd_down[0, :, :]
                 ids_down = ids[pcd_down_index.cpu()][0]
-                write_ply(pcd_out, ids_down, os.path.join(sampled_output, str(filename1) +'_' + str(filename2) + '.ply'))
+                write_ply(pcd_out, ids_down, os.path.join(sampled_output, str(filename1) +'_' + str(filename2) + '.ply'), npoint)

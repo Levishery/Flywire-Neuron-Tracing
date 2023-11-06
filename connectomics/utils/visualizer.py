@@ -59,20 +59,21 @@ class Visualizer(object):
                 output[idx] = decode_quantize(
                     output[idx], mode='max').unsqueeze(1)
                 temp_label = label[idx].copy().astype(np.float32)[
-                    :, np.newaxis]
+                             :, np.newaxis]
                 label[idx] = temp_label / temp_label.max() + 1e-6
             if topt[0] == 'e':
                 output[idx] = self.emb2rgb(output[idx])
                 if label[idx].dim() == 6:
                     volume_vis = volume.detach().cpu()
                     label_tmp = label[idx][:, 1, :, :, :, :] / label[idx][:, 1, :, :, :, :].max() + 1e-6
-                    seg_ids = np.setdiff1d(np.asarray(np.unique(np.asarray(label[idx][:, 1, :, :, :, :].detach().cpu()))), [0])
+                    seg_ids = np.setdiff1d(
+                        np.asarray(np.unique(np.asarray(label[idx][:, 1, :, :, :, :].detach().cpu()))), [0])
                     if len(seg_ids) > 0:
                         name_ids = 'ids: '
                         for id in seg_ids:
                             name_ids = name_ids + str(int(id)) + ','
                         writer.add_text('seg_ids', name_ids, iter_total)
-                    label[idx] = label_tmp*volume_vis*0.5 + volume_vis*0.5
+                    label[idx] = label_tmp * volume_vis * 0.5 + volume_vis * 0.5
                 else:
                     label[idx] = label[idx] / label[idx].max() + 1e-6
             RGB = (topt[0] in ['1', '2', '9', 'e'])
@@ -99,7 +100,7 @@ class Visualizer(object):
             volume, label, output, weight_maps)
         sz = volume.size()  # z,c,y,x
         label_sz = label.size()
-        pad_y = int((sz[2]-label_sz[2])/2)
+        pad_y = int((sz[2] - label_sz[2]) / 2)
         pad_x = int((sz[3] - label_sz[3]) / 2)
         pad = (pad_x, pad_x, pad_y, pad_y)
 
@@ -111,10 +112,10 @@ class Visualizer(object):
         canvas.append(volume_visual)
 
         def maybe2rgb(temp):
-            if temp.shape[1] == 2: # 2d affinity map has two channels
+            if temp.shape[1] == 2:  # 2d affinity map has two channels
                 temp = torch.cat([temp, torch.zeros(
                     sz[0], 1, sz[2], sz[3]).type(temp.dtype)], dim=1)
-            if temp.shape[1] == 1: # original label has one channels
+            if temp.shape[1] == 1:  # original label has one channels
                 temp = torch.cat([temp, temp, temp], dim=1)
             return temp
 
@@ -131,7 +132,7 @@ class Visualizer(object):
         for key in weight_maps.keys():
             weight_maps[key] = F.pad(weight_maps[key], pad, "constant", 0)
             weight_visual.append(maybe2rgb(weight_maps[key]).detach().cpu().expand(
-                                 sz[0], 3, sz[2], sz[3]))
+                sz[0], 3, sz[2], sz[3]))
 
         canvas = canvas + output_visual + label_visual + weight_visual
         canvas_merge = torch.cat(canvas, 0)
@@ -167,7 +168,7 @@ class Visualizer(object):
         if argmax:
             output = torch.argmax(output, 1)
         pred = self.semantic_colors[topt][output]
-        if len(pred.size()) == 4:   # 2D Inputs
+        if len(pred.size()) == 4:  # 2D Inputs
             pred = pred.permute(0, 3, 1, 2)
         elif len(pred.size()) == 5:  # 3D Inputs
             pred = pred.permute(0, 4, 1, 2, 3)
@@ -193,8 +194,8 @@ class Visualizer(object):
         ax = fig.gca(projection='3d')
         voxels = resize(volume[index, 2, :, :, :] != 0)
         colors = np.empty(voxels.shape, dtype=object)
-        colors[resize(volume[index, 0, :, :, :])>0] = 'red'
-        colors[resize(volume[index, 1, :, :, :])>0] = 'blue'
+        colors[resize(volume[index, 0, :, :, :]) > 0] = 'red'
+        colors[resize(volume[index, 1, :, :, :]) > 0] = 'blue'
         ax.voxels(voxels, facecolors=colors)
         plt.title("pred:%f; target:%f." % (pred.item(), target.item()))
         # from plt to np
@@ -204,9 +205,9 @@ class Visualizer(object):
         buf = np.fromstring(canvas.tostring_argb(), dtype=np.uint8)
         buf.shape = (w, h, 4)
         buf = np.roll(buf, 3, axis=2)
-        image = Image.frombytes("RGBA", (w, h), buf.tostring()).resize((300,240))
+        image = Image.frombytes("RGBA", (w, h), buf.tostring()).resize((300, 240))
         image = np.asarray(image)
-        return image.transpose(2,0,1)
+        return image.transpose(2, 0, 1)
 
     def vol_reshape(self, vol, sz):
         vol = vol.detach().cpu().unsqueeze(1)
@@ -228,7 +229,7 @@ class Visualizer(object):
         image = Image.frombytes("RGBA", (w, h), buf.tostring())
         image = np.asarray(image)
         plot_distance = image[:, :, :3]
-        plot_distance.transpose(2,1,0)
+        plot_distance.transpose(2, 1, 0)
         writer.add_image('%s distance scatter plot' % name, plot_distance, iteration, dataformats='HWC')
 
     def plot_3dshape(self, writer, pred, target, volume, iteration, name=None, pos_data=None):
@@ -249,3 +250,16 @@ class Visualizer(object):
         canvas_show = vutils.make_grid(
             [x.float() for x in canvas], nrow=4, normalize=True, scale_each=True)
         writer.add_image('%s 3d plot' % name, canvas_show, iteration)
+
+
+def label_to_random_color(label):
+    out_r = np.zeros(label.shape)
+    out_g = np.zeros(label.shape)
+    out_b = np.zeros(label.shape)
+    unique_labels = np.setdiff1d(np.unique(label), [0])
+    for unique_label in unique_labels:
+        out_r[np.where(label == unique_label)] = random.randint(0, 254)
+        out_g[np.where(label == unique_label)] = random.randint(0, 254)
+        out_b[np.where(label == unique_label)] = random.randint(0, 254)
+    return np.concatenate((np.expand_dims(out_r, axis=3), np.expand_dims(out_g, axis=3), np.expand_dims(out_b, axis=3)),
+                          axis=3)

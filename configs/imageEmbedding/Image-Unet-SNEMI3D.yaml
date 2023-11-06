@@ -40,9 +40,15 @@ DATASET:
 INFERENCE:
   OUTPUT_ACT: ["none"]
   SAMPLES_PER_BATCH: 4 # per gpu
-  INPUT_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/positives/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5#/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/negatives/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5
-  OUTPUT_PATH: /braindat/lab/liusl/aaai24/snemi3d/image_feature_patch/connect-embed
-  IMAGE_NAME: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D.csv
+#  INPUT_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/positives/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5#/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/negatives/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5
+#  OUTPUT_PATH: /braindat/lab/liusl/aaai24/snemi3d/image_feature_patch/connect-embed/test
+#  IMAGE_NAME: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/testing/SNEMI3D-test-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D.csv
+#  INPUT_PATH: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/training/positives/SNEMI3D-train-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5#/braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/training/negatives/SNEMI3D-train-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5
+#  OUTPUT_PATH: /braindat/lab/liusl/aaai24/snemi3d/image_feature_patch/connect-embed/train
+#  IMAGE_NAME: /braindat/lab/liusl/flywire/biologicalgraphs/biologicalgraphs/neuronseg/features/biological/edges-0nm-8x64x64/training/SNEMI3D-train-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D.csv
+  INPUT_PATH: /h3cstore_nt/JaneChen/SNEMI3D/edges-0nm-8x64x64/training/positives/SNEMI3D-train-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5#/h3cstore_nt/JaneChen/SNEMI3D/edges-0nm-8x64x64/training/negatives/SNEMI3D-train-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D-examples.h5
+  OUTPUT_PATH: /h3cstore_nt/JaneChen/SNEMI3D/image_feature_patch/connect-embed/train
+  IMAGE_NAME: /h3cstore_nt/JaneChen/SNEMI3D/edges-0nm-8x64x64/training/SNEMI3D-train-segmentation-wos-reduced-nodes-0-17x129x129-SNEMI3D.csv
 AUGMENTOR:
   SMOOTH: False
   MISSINGPARTS:
