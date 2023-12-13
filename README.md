@@ -1,4 +1,15 @@
 # flywire_NeuronRec
+## Dataset Access
+### FlyTracing pairwise segment connection dataset
+The dataset and our best pre-trained models is available at [Google Drive](https://drive.google.com/drive/folders/1FPg8q8BE-R-BiVxdAZ8qHDYLacYGLxgJ?usp=drive_link)
+### FAFB EM image
+To download the EM image blocks:
+```bash
+cd dataset/download_fafb.py
+# edit the block name csv path (provided in the link above) and destination path to yours
+python download_fafb.py
+```
+The 4000 blocks require about 1TB of storage space.
 ## Fintune the models on SNEMI3D
 ### Input: 
 
