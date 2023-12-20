@@ -125,7 +125,8 @@ def main():
                 trainer.get_pc_feature(mode, rank=args.local_rank)
             elif cfg.INFERENCE.GET_PC_FEATURE == 'GPT':
                 result_center_cord_dict, result_fafb_cord_dict, result_embedding_dict = trainer.get_pc_feature_gpt(mode, rank=args.local_rank)
-                save_feature([result_center_cord_dict, result_fafb_cord_dict, result_embedding_dict], cfg.DATASET.OUTPUT_PATH)
+                if not ('blocks' in cfg.DATASET.OUTPUT_PATH):
+                    save_feature([result_center_cord_dict, result_fafb_cord_dict, result_embedding_dict, list(seq_data.keys())], cfg.DATASET.OUTPUT_PATH)
         elif cfg.INFERENCE.GET_PATCH_FEATURE:
             trainer.test_patch(mode, rank=args.local_rank)
         else:

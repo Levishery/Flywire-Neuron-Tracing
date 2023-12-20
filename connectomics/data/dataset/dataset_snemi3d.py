@@ -77,7 +77,9 @@ class Snemi3dDataset(torch.utils.data.Dataset):
                 self.pos_images = readh5(sample_path.replace('.h5', '-img.h5').split('#')[0])
                 self.neg_images = readh5(sample_path.replace('.h5', '-img.h5').split('#')[1])
                 self.segmentation = np.concatenate((self.pos_segmentation, self.neg_segmentation), axis=0)
+                del self.pos_segmentation, self.neg_segmentation
                 self.images = np.concatenate((self.pos_images, self.neg_images), axis=0)
+                del self.pos_images, self.neg_images
                 self.connector_df = pd.read_csv(label_name)
                 assert len(self.connector_df) == self.total_samples
             self.iter_num = 200 * max(
@@ -147,7 +149,7 @@ class Snemi3dDataset(torch.utils.data.Dataset):
                 return self._connector_to_target_sample_test(index)
         else:
             if self.mode == 'train':
-                if random.random() > 0.4:
+                if random.random() > 0.5:
                     idx = random.randint(0, self.total_pos_samples - 1)
                     pos_data, out_volume, out_target, out_weight = self._get_morph_sample(idx)
                 else:
@@ -157,6 +159,7 @@ class Snemi3dDataset(torch.utils.data.Dataset):
             elif self.mode == 'val':
                 pos_data, out_volume, out_target, out_weight = self._get_morph_sample(index)
                 return pos_data, out_volume, out_target, out_weight
+
 
     def sample_from_normal3d(self, sigma_z, sigma_xy, point_num):
         # print(np.asarray([np.random.normal(0, sigma_z, point_num),
@@ -211,6 +214,9 @@ class Snemi3dDataset(torch.utils.data.Dataset):
         pos_data = {'pos': [0, 0, 0, 0],
                     'seg_start': seg_start,
                     'seg_candidate': seg_candidate}
+        if out_volume.shape != tuple(self.model_input_size):
+            out_volume = crop_volume(out_volume, self.model_input_size)
+            out_label = crop_volume(out_label, self.model_input_size)
         out_volume = np.expand_dims(out_volume, 0)
         out_volume = normalize_image(out_volume, self.data_mean, self.data_std)
 

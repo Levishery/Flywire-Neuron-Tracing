@@ -301,18 +301,24 @@ def get_blocknames_from_points(input_file_path):
         os.makedirs(input_file_path, exist_ok=True)
         with open(input_file_path + '.pkl', "rb") as f:
             seq_data = pickle.load(f)
-        for j in tqdm(range(len(seq_data))):
-            seq = seq_data[j]
+        idx = 0
+        for key in tqdm(list(seq_data.keys())):
+            seq = seq_data[key]
             points = seq[1]
             for i in range(points.shape[0]):
                 point = points[i, :]
-                candidates = list(seq[0])
+                candidates = seq[2][i]
+                try:
+                    candidates_int = [int(x) for x in candidates]
+                except:
+                    continue
                 x_block, y_block, z_block = fafb_to_block(point[0], point[1], point[2])
                 block_name = 'connector_' + str(x_block) + '_' + str(y_block) + '_' + str(z_block)
                 row = pd.DataFrame(
-                    [{'node0_segid': int(j), 'node1_segid': str(candidates), 'cord': point, 'target': int(i),
+                    [{'node0_segid': idx, 'node1_segid': str(candidates_int), 'cord': point, 'target': int(i),
                       'prediction': -1}])
                 row.to_csv(os.path.join(input_file_path, block_name + '.csv'), mode='a', header=False, index=False)
+            idx = idx + 1
     else:
         with open(input_file_path + '.pkl', "rb") as f:
             seq_data = pickle.load(f)
@@ -321,5 +327,12 @@ def get_blocknames_from_points(input_file_path):
 
 def save_feature(seq_data, path):
     file_path = os.path.join(path, 'sequence_with_imagefeature.pkl')
-    with open(file_path, 'wb') as file:
-        pickle.dump(seq_data, file)
+    if not os.path.exists(file_path):
+        with open(file_path, 'wb') as file:
+            pickle.dump(seq_data, file)
+
+def load_feature(path):
+    file_path = os.path.join(path, 'sequence_with_imagefeature.pkl')
+    with open(file_path, 'rb') as file:
+        x = pickle.load(file)
+    return x

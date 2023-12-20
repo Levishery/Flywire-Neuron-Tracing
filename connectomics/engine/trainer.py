@@ -34,7 +34,7 @@ from ..data.augmentation import build_train_augmentor, TestAugmentor
 from ..data.dataset import build_dataloader, get_dataset, ConnectorDataset, PatchDataset
 from ..data.dataset.build import _get_file_list, _make_path_list
 from ..data.utils import build_blending_matrix, writeh5, get_connection_distance, get_connection_ranking, pca_emb, \
-    readh5, save_feature, get_prediction_from_distance
+    readh5, save_feature, get_prediction_from_distance, load_feature
 from ..data.utils import get_padsize, array_unpad, readvol, patch_rand_drop, stat_biological_recall, select_points, \
     get_crop_index
 
@@ -246,7 +246,8 @@ class Trainer(object):
                     distance_pos_list.append(distance_pos)
                     classification_list = classification_list + classification
                     rank_list = rank_list + rank
-                if self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET or (self.cfg.DATASET.SNEMI3D_DATSET and not self.cfg.DATASET.CONNECTOR_DATSET):
+                if self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET or (
+                        self.cfg.DATASET.SNEMI3D_DATSET and not self.cfg.DATASET.CONNECTOR_DATSET):
                     TP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 1))
                     TP_total = TP_total + TP
                     FP = sum(torch.logical_and(pred.detach().cpu() > 0.5, target[0] == 0))
@@ -260,7 +261,8 @@ class Trainer(object):
         if hasattr(self, 'monitor'):
             self.monitor.logger.log_tb.add_scalar(
                 '%s_Validation_Loss' % name, val_loss, iter_total)
-            if not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET or (self.cfg.DATASET.SNEMI3D_DATSET and not self.cfg.DATASET.CONNECTOR_DATSET)):
+            if not (self.cfg.DATASET.MORPHOLOGY_DATSET or self.cfg.DATASET.BIOLOGICAL_DATSET or (
+                    self.cfg.DATASET.SNEMI3D_DATSET and not self.cfg.DATASET.CONNECTOR_DATSET)):
                 self.monitor.visualize(volume, target, pred,
                                        weight, iter_total, suffix='Val')
             else:
@@ -321,8 +323,12 @@ class Trainer(object):
                 volume = volume.to(self.device, non_blocking=True)
                 output = self.augmentor(self.model, volume)
                 for idx in range(len(pos)):
-                    save = np.concatenate((output[idx, :, :, :, :], np.expand_dims(segmentation[idx].astype(np.float32), axis=0),), axis=0)
-                    writeh5(os.path.join(self.cfg.DATASET.OUTPUT_PATH, str(pos[idx]['seg_start']) + '_' + str(pos[idx]['seg_candidate']) + '.h5'), save)
+                    save = np.concatenate(
+                        (output[idx, :, :, :, :], np.expand_dims(segmentation[idx].astype(np.float32), axis=0),),
+                        axis=0)
+                    writeh5(os.path.join(self.cfg.DATASET.OUTPUT_PATH,
+                                         str(pos[idx]['seg_start']) + '_' + str(pos[idx]['seg_candidate']) + '.h5'),
+                            save)
                 if torch.cuda.is_available() and i % 50 == 0:
                     GPUtil.showUtilization(all=True)
 
@@ -367,7 +373,7 @@ class Trainer(object):
                 ids = sample.candidates
                 volume, embedding = self.get_morph_input(volume)
                 # make prediction using segment embedding distance only
-                #pred = self.get_prediction_from_distance(volume)
+                # pred = self.get_prediction_from_distance(volume)
                 # visualize(volume, sample.out_input, index=22, mask=True)
                 # prediction
                 with autocast(enabled=self.cfg.MODEL.MIXED_PRECESION):
@@ -548,80 +554,92 @@ class Trainer(object):
         for chunk in tqdm(range(num_chunk)):
             csv_path = block_path[chunk]
             block_name = csv_path.split('/')[-1].split('.')[0]
-            print('getting block %s' % block_name)
-            block_embedding_dict = {}
-            block_fafb_cord_dict = {}
-            block_center_cord_dict = {}
-            csv_list = pd.read_csv(csv_path, header=None)
-            try:
-                self.dataset.updatechunk_given_path(csv_path)
-                self.dataloader = build_dataloader(self.cfg, None, mode, dataset=self.dataset.dataset)
-                self.dataloader = iter(self.dataloader)
-            except:
-                print('image not download')
-                continue
-            block_start_cord = self.dataset.start_cord
-            start = time.perf_counter()
-            with torch.no_grad():
-                for i, sample in enumerate(self.dataloader):
-                    print('progress: %d/%d batches, total time %.2fs' %
-                          (i + 1, len(self.dataloader), time.perf_counter() - start))
-                    volume = sample.out_input
-                    seg_ids = sample.candidates
-                    volume, _ = self.get_morph_input(volume, sample.pos)
-                    label = sample.seg_start
-                    for idx in range(len(seg_ids)):
-                        # index in batch
-                        patch_cord = np.asarray(block_start_cord) + np.asarray(
-                            [sample.pos[idx][2] * 4, sample.pos[idx][3] * 4, sample.pos[idx][1]])
-                        center_cord = patch_cord + patch_size * [4,4,1] / 2
-                        dict_idx = label[idx]
-                        candidates = seg_ids[idx]
-                        embedding_patch = volume[idx, -16:, :]
-                        masks = volume[idx, :-16, :]
-                        embedding_list = []
-                        points_cord_fafb_list = []
-                        for candidate_idx in range(len(candidates)):
-                            # index candidates
-                            id = candidates[candidate_idx]
-                            if id == 0:
-                                continue
-                            mask = masks[candidate_idx].cpu()
-                            embeddings = np.zeros([n_point, 16])
-                            points_cord_fafb = np.zeros([n_point, 3])
-                            if not mask.any():
+            if not os.path.exists(os.path.join(self.cfg.DATASET.OUTPUT_PATH, block_name)):
+                os.makedirs(os.path.join(self.cfg.DATASET.OUTPUT_PATH, block_name))
+                print('getting block %s' % block_name)
+                block_embedding_dict = {}
+                block_fafb_cord_dict = {}
+                block_center_cord_dict = {}
+                csv_list = pd.read_csv(csv_path, header=None)
+                try:
+                    self.dataset.updatechunk_given_path(csv_path)
+                    self.dataloader = build_dataloader(self.cfg, None, mode, dataset=self.dataset.dataset)
+                    self.dataloader = iter(self.dataloader)
+                except:
+                    print('image not download')
+                    continue
+                block_start_cord = self.dataset.start_cord
+                start = time.perf_counter()
+                with torch.no_grad():
+                    for i, sample in enumerate(self.dataloader):
+                        print('progress: %d/%d batches, total time %.2fs' %
+                              (i + 1, len(self.dataloader), time.perf_counter() - start))
+                        volume = sample.out_input
+                        seg_ids = sample.candidates
+                        volume, _ = self.get_morph_input(volume, sample.pos)
+                        label = sample.seg_start
+                        for idx in range(len(seg_ids)):
+                            # index in batch
+                            patch_cord = np.asarray(block_start_cord) + np.asarray(
+                                [sample.pos[idx][2] * 4, sample.pos[idx][3] * 4, sample.pos[idx][1]])
+                            center_cord = patch_cord + patch_size * [4, 4, 1] / 2
+                            dict_idx = label[idx]
+                            candidates = seg_ids[idx]
+                            embedding_patch = volume[idx, -16:, :]
+                            masks = volume[idx, :-16, :]
+                            embedding_list = []
+                            points_cord_fafb_list = []
+                            for candidate_idx in range(len(candidates)):
+                                # index candidates
+                                id = candidates[candidate_idx]
+                                if id == 0:
+                                    continue
+                                mask = masks[candidate_idx].cpu()
+                                embeddings = np.zeros([n_point, 16])
+                                points_cord_fafb = np.zeros([n_point, 3])
+                                if not mask.any():
+                                    embedding_list.append(embeddings)
+                                    points_cord_fafb_list.append(points_cord_fafb)
+                                    continue
+                                # get n_point points per candidates
+                                locs = np.asarray(np.where(mask > 0))
+                                for loc_idx in range(n_point):
+                                    point_idx = random.randint(0, locs.shape[1] - 1)
+                                    cord_in_patch = np.asarray(
+                                        [locs[1, point_idx], locs[2, point_idx], locs[0, point_idx]])  # zyx to xyz
+                                    cord_fafb = patch_cord + cord_in_patch * [4, 4, 1]
+                                    points_cord_fafb[loc_idx, :] = cord_fafb
+                                    [x_bound, y_bound, z_bound] = get_crop_index(cord_in_patch, half_patch_size,
+                                                                                 patch_size)
+                                    # mask the local embedding with interested segmentation mask
+                                    local_mask = mask[z_bound[0]:z_bound[1],
+                                                 x_bound[0]:x_bound[1], y_bound[0]:y_bound[1]] == 1
+                                    local_embed = embedding_patch[:, z_bound[0]:z_bound[1], x_bound[0]:x_bound[1],
+                                                  y_bound[0]:y_bound[1]]
+                                    mean_embed = torch.mean(local_embed[:, local_mask], dim=1)
+                                    embeddings[loc_idx, :] = mean_embed.detach().cpu().numpy()
                                 embedding_list.append(embeddings)
                                 points_cord_fafb_list.append(points_cord_fafb)
-                                continue
-                            # get n_point points per candidates
-                            locs = np.asarray(np.where(mask > 0))
-                            for loc_idx in range(n_point):
-                                point_idx = random.randint(0, locs.shape[1]-1)
-                                cord_in_patch = np.asarray([locs[1, point_idx], locs[2, point_idx], locs[0, point_idx]]) #zyx to xyz
-                                cord_fafb = patch_cord + cord_in_patch * [4, 4, 1]
-                                points_cord_fafb[loc_idx, :] = cord_fafb
-                                [x_bound, y_bound, z_bound] = get_crop_index(cord_in_patch, half_patch_size,
-                                                                             patch_size)
-                                # mask the local embedding with interested segmentation mask
-                                local_mask = mask[z_bound[0]:z_bound[1],
-                                             x_bound[0]:x_bound[1], y_bound[0]:y_bound[1]] == 1
-                                local_embed = embedding_patch[:, z_bound[0]:z_bound[1], x_bound[0]:x_bound[1],
-                                              y_bound[0]:y_bound[1]]
-                                mean_embed = torch.mean(local_embed[:, local_mask], dim=1)
-                                embeddings[loc_idx, :] = mean_embed.detach().cpu().numpy()
-                            embedding_list.append(embeddings)
-                            points_cord_fafb_list.append(points_cord_fafb)
-                        # torch.norm(torch.mean(torch.tensor(embedding_list[1]), dim=0) - torch.mean(
-                        #     torch.tensor(embedding_list[3]), dim=0))
-                        result_embedding_dict[dict_idx[0], dict_idx[1]] = embedding_list
-                        result_fafb_cord_dict[dict_idx[0], dict_idx[1]] = points_cord_fafb_list
-                        result_center_cord_dict[dict_idx[0], dict_idx[1]] = center_cord
+                            # torch.norm(torch.mean(torch.tensor(embedding_list[1]), dim=0) - torch.mean(
+                            #     torch.tensor(embedding_list[3]), dim=0))
+                            result_embedding_dict[dict_idx[0], dict_idx[1]] = embedding_list
+                            result_fafb_cord_dict[dict_idx[0], dict_idx[1]] = points_cord_fafb_list
+                            result_center_cord_dict[dict_idx[0], dict_idx[1]] = center_cord
 
-                        block_embedding_dict[dict_idx[0], dict_idx[1]] = embedding_list
-                        block_fafb_cord_dict[dict_idx[0], dict_idx[1]] = points_cord_fafb_list
-                        block_center_cord_dict[dict_idx[0], dict_idx[1]] = center_cord
-            os.makedirs(os.path.join(self.cfg.DATASET.OUTPUT_PATH, block_name))
-            save_feature([result_center_cord_dict, result_fafb_cord_dict, result_embedding_dict], os.path.join(self.cfg.DATASET.OUTPUT_PATH, block_name))
+                            block_embedding_dict[dict_idx[0], dict_idx[1]] = embedding_list
+                            block_fafb_cord_dict[dict_idx[0], dict_idx[1]] = points_cord_fafb_list
+                            block_center_cord_dict[dict_idx[0], dict_idx[1]] = center_cord
+                save_feature([block_center_cord_dict, block_fafb_cord_dict, block_embedding_dict],
+                             os.path.join(self.cfg.DATASET.OUTPUT_PATH, block_name))
+            else:
+                if not ('blocks' in self.cfg.DATASET.OUTPUT_PATH):
+                    [block_center_cord_dict, block_fafb_cord_dict, block_embedding_dict] = load_feature(
+                        os.path.join(self.cfg.DATASET.OUTPUT_PATH, 'blocks', block_name))
+                    for (key1, key2) in list(block_fafb_cord_dict.keys()):
+                        result_embedding_dict[key1, key2] = block_embedding_dict[key1, key2]
+                        result_fafb_cord_dict[key1, key2] = block_fafb_cord_dict[key1, key2]
+                        result_center_cord_dict[key1, key2] = block_center_cord_dict[key1, key2]
+
         return result_center_cord_dict, result_fafb_cord_dict, result_embedding_dict
 
     def get_pc_feature(self, mode: str, rank=None):

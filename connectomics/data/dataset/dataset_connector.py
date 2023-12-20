@@ -486,7 +486,7 @@ class ConnectorDataset(torch.utils.data.Dataset):
             out_label = morph_list
         return pos, out_volume, out_label, seg_start, candidates
 
-    def get_test_sample(self, connector, morphology=True, max_candidate=50):
+    def get_test_sample(self, connector, morphology=True, max_candidate=120):
         cord = connector[2][1:-1].split()
         cord = [item for item in cord if item != ""]
         if len(cord) == 4:
