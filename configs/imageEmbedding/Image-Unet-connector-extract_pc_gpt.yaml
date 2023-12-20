@@ -18,7 +18,7 @@ MODEL:
   WEIGHT_OPT: [[ "0", "0" ]]
   OUTPUT_ACT: [[ "none",  "none" ]]
   IMAGE_MODEL_CFG: configs/test-Image-Unet-connector.yaml
-  IMAGE_MODEL_CKPT: /braindat/lab/liusl/flywire/experiment/ckpts/embeddings/checkpoint_best_Unet2.pth
+  IMAGE_MODEL_CKPT: /h3cstore_nt/models/embeddings/checkpoint_best_Unet2.pth
 MONITOR:
   ITERATION_NUM: [20, 200]
 SOLVER:
@@ -37,16 +37,18 @@ DATASET:
   CONNECTOR_DATSET: True
   MORPHOLOGY_DATSET: True
 #  INPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_corrs.pkl
-  INPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_corrs_v3
+  INPUT_PATH: /h3cstore_nt/JaneChen/gpt-data/squence/sequence_with_corrs_and_candiadates
   IMAGE_NAME:
   LABEL_NAME:
-  OUTPUT_PATH: /braindat/lab/liusl/flywire/experiment/test
+  OUTPUT_PATH: /h3cstore_nt/JaneChen/gpt-data/squence/image-feature_with_corrs_and_candiadates/blocks
   DO_MULTI_VOLUME: True
   DISTRIBUTED: True
-  VOL_FFN1_PATH: file:///braindat/lab/lizl/google/google_16.0x16.0x40.0
-  BLOCK_IMAGE_PATH: /braindat/lab/liusl/flywire/block_data/fafbv14
+  VOL_FFN1_PATH: file:///h3cstore_nt/fafb-ffn1
+  BLOCK_IMAGE_PATH: /h3cstore_nt/fafbv14/block_data
+#  VOL_FFN1_PATH: file:///braindat/lab/lizl/google/google_16.0x16.0x40.0
+#  BLOCK_IMAGE_PATH: /braindat/lab/liusl/flywire/block_data/fafbv14
 INFERENCE:
-  OUTPUT_PATH: /braindat/lab/liusl/gpt/sequence_with_imagefeature_v3
+  OUTPUT_PATH: /h3cstore_nt/JaneChen/gpt-data/squence/image-feature_with_corrs_and_candiadates/blocks
   GET_PC_FEATURE: GPT
   OUTPUT_ACT: ["none"]
   SAMPLES_PER_BATCH: 4 # per gpu
