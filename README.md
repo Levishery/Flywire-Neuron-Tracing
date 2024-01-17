@@ -31,7 +31,13 @@ testing -- raw image, initial over-segmentation
 1. Prepare image patches of positive connections for finetuning Connect-Embed using [get_snemi_patch.py](https://github.com/Levishery/Biological-graph/blob/main/biologicalgraphs/neuronseg/scripts/get_snemi_patch.py);
    The code produces patch image/GT/segmentation centered at the center of gravity of the connected area between segment pairs;
 2. Sample point cloud from segmentation [get_pc_snemi3d.py](https://github.com/Levishery/flywire_NeuronRec/blob/main/dataset/snemi3d/get_pc_snemi3d.py);
-3. Fintune the image embedding model and run inference on the test set [config](https://github.com/Levishery/flywire_NeuronRec/blob/main/configs/imageEmbedding/Image-Unet-SNEMI3D.yaml);
+3. Fintune the image embedding model and run inference on the test set [config](https://github.com/Levishery/flywire_NeuronRec/blob/main/configs/imageEmbedding/Image-Unet-SNEMI3D.yaml)
+```bash
+# train
+python main.py --config-base configs/Image-Base.yaml --config-file configs/imageEmbedding/Image-Unet-SNEMI3D.yaml --checkpoint embedding_best_model.pth
+# inference
+python main.py --config-base configs/Image-Base.yaml --config-file configs/imageEmbedding/Image-Unet-SNEMI3D.yaml --checkpoint SNEMI_embedding_best.pth --inference INFERENCE.OUTPUT_PATH test SYSTEM.NUM_CPUS 0
+```
 4. Map the computed embedding to the point cloud [map_pc_snemi3d.py](https://github.com/Levishery/flywire_NeuronRec/blob/main/dataset/snemi3d/map_pc_snemi3d.py);
 5. Finetune the Pointnet++ refer to [Pointnet/README](https://github.com/Levishery/Flywire-Neuron-Tracing/tree/main/Pointnet)
 
