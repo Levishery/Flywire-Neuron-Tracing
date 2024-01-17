@@ -1,4 +1,6 @@
 # flywire_NeuronRec
+Learning Multimodal Volumetric Features for Large-Scale Neuron Tracing
+https://arxiv.org/abs/2401.03043
 ## Dataset Access
 ### FlyTracing pairwise segment connection dataset
 The dataset and our best pre-trained models are available at [Google Drive](https://drive.google.com/drive/folders/1FPg8q8BE-R-BiVxdAZ8qHDYLacYGLxgJ?usp=drive_link)
@@ -34,3 +36,14 @@ testing -- raw image, initial over-segmentation
 5. Finetune the Pointnet++ refer to [Pointnet/README](https://github.com/Levishery/Flywire-Neuron-Tracing/tree/main/Pointnet)
 
 TODO: merge step 3 and 4
+
+### Citation
+If you find our repository useful in your research, please consider citing:
+```bibtex
+@inproceedings{chen2024learning,
+      title={Learning Multimodal Volumetric Features for Large-Scale Neuron Tracing}, 
+      author={Qihua Chen and Xuejin Chen and Chenxuan Wang and Yixiong Liu and Zhiwei Xiong and Feng Wu},
+      year={2024},
+      booktitle={Proceedings of the AAAI Conference on Artificial Intelligence},
+}
+```
